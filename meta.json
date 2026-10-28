@@ -1,0 +1,15 @@
+{
+  "category": "General",
+  "changelog": "First release: read-only playlist owner lookups for signed-in users.",
+  "description": "Tells signed-in users who owns a playlist they can see, so shared lists keep their creator even after Jellyfin drops a playlist's shares.",
+  "guid": "d95b4484-62cb-4873-92c5-66a65b86b420",
+  "name": "Sashimi Lists",
+  "overview": "Playlist owner lookups for Sashimi clients.",
+  "owner": "Bitstorm Labs",
+  "targetAbi": "12.4.0.0",
+  "timestamp": "2026-10-28T00:00:00.0000000Z",
+  "version": "0.1.0.0",
+  "status": "Active",
+  "autoUpdate": false,
+  "assemblies": []
+}

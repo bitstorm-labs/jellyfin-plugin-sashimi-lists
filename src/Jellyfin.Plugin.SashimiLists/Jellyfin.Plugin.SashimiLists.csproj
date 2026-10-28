@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    net10.0 because Jellyfin.Controller 12.x ships net10.0 only. Build with the
+    .NET 10 SDK; Core and its tests do not need it.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyVersion>0.1.0.0</AssemblyVersion>
+    <FileVersion>0.1.0.0</FileVersion>
+    <Authors>Bitstorm Labs</Authors>
+    <Copyright>Copyright (c) 2026 Bitstorm Labs</Copyright>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Must match the server (Jellyfin 12.4). Dependabot ignores Jellyfin.*. -->
+    <PackageReference Include="Jellyfin.Controller" Version="12.4.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Jellyfin.Plugin.SashimiLists.Core\Jellyfin.Plugin.SashimiLists.Core.csproj" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,23 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          # Core and its tests are net9.0; the plugin shell is net10.0
+          # because Jellyfin.Controller 12.x ships net10.0 only.
+          dotnet-version: |
+            9.0.x
+            10.0.x
+      - name: Test the visibility rule
+        run: dotnet test tests/Jellyfin.Plugin.SashimiLists.Core.Tests
+      - name: Build the plugin
+        run: dotnet build src/Jellyfin.Plugin.SashimiLists -c Release -warnaserror

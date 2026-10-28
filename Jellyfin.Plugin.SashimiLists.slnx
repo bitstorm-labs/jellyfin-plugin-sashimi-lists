@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Jellyfin.Plugin.SashimiLists.Core/Jellyfin.Plugin.SashimiLists.Core.csproj" />
+    <Project Path="src/Jellyfin.Plugin.SashimiLists/Jellyfin.Plugin.SashimiLists.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Jellyfin.Plugin.SashimiLists.Core.Tests/Jellyfin.Plugin.SashimiLists.Core.Tests.csproj" />
+  </Folder>
+</Solution>

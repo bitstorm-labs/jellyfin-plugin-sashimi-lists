@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Deliberately free of any Jellyfin reference: the visibility rule and the
+    batch filtering are plain logic, so they build on any SDK and test in
+    milliseconds. The plugin shell follows whatever TFM Jellyfin.Controller needs.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyVersion>0.1.0.0</AssemblyVersion>
+    <FileVersion>0.1.0.0</FileVersion>
+    <Authors>Bitstorm Labs</Authors>
+    <Copyright>Copyright (c) 2026 Bitstorm Labs</Copyright>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+</Project>
