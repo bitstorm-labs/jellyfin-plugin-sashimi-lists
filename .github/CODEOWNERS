@@ -1,0 +1,19 @@
+# Changes to these paths need a review from a code owner before they merge
+# into main (the "main: reviews and checks" ruleset requires it).
+#
+# They cover everything that runs with repository credentials or decides
+# what ships: workflows and their scripts, the build and package config, and
+# the plugin metadata Jellyfin reads. Everything else merges on green CI.
+
+/.github/                @mondominator
+*.csproj                 @mondominator
+*.props                  @mondominator
+*.targets                @mondominator
+*.sln                    @mondominator
+*.slnx                   @mondominator
+global.json              @mondominator
+nuget.config             @mondominator
+NuGet.Config             @mondominator
+/build.yaml              @mondominator
+/meta.json               @mondominator
+/manifest.json           @mondominator
