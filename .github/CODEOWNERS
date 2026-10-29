@@ -20,3 +20,12 @@ NuGet.Config             @mondominator
 /build.yaml              @mondominator
 /meta.json               @mondominator
 /manifest.json           @mondominator
+
+# Agent and editor config runs on the maintainer's machine (hooks, commands,
+# instructions), so it gets the same review as CI.
+/CLAUDE.md               @mondominator
+/AGENTS.md               @mondominator
+/.claude/                @mondominator
+/.codex/                 @mondominator
+/.githooks/              @mondominator
+/.vscode/                @mondominator
