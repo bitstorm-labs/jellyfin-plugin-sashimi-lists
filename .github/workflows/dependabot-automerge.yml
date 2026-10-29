@@ -3,11 +3,14 @@ name: Dependabot auto-merge
 # Merges Dependabot's patch/minor PRs (including grouped ones) once CI passes.
 # Major bumps are left for a human.
 #
-# This repo is private on GitHub Free, which offers neither branch
-# protection (required checks) nor GitHub's auto-merge.
-# So this job waits for the CI check ("build-and-test") itself and merges only the
-# exact commit that passed (--match-head-commit). A failed check leaves the PR
-# open for review.
+# The job waits for the CI check ("build-and-test") itself and merges only
+# the exact commit that passed (--match-head-commit). A failed check leaves
+# the PR open for review.
+#
+# Updates that touch a code-owned path (*.csproj, .github/) also need the code
+# owner's approval under the "main: reviews and checks" ruleset, and
+# GITHUB_TOKEN can't bypass a ruleset. --auto queues those so they merge as
+# soon as the owner approves; anything already mergeable merges at once.
 
 on: pull_request
 
@@ -48,7 +51,7 @@ jobs:
             echo "$CHECK: $state"
             case "$state" in
               success)
-                gh pr merge "$PR_URL" --merge --match-head-commit "$HEAD_SHA"
+                gh pr merge "$PR_URL" --auto --merge --match-head-commit "$HEAD_SHA"
                 exit 0 ;;
               missing|pending) sleep 30 ;;
               *)
