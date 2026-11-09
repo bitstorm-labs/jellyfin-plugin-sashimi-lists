@@ -43,3 +43,115 @@ internal sealed class TempStore : IDisposable
         }
     }
 }
+
+/// <summary>
+/// An in-memory plex.tv: a catalog of titles (ratingKey → item + ids) and one
+/// account's watchlist. Records every Add/Remove call.
+/// </summary>
+internal sealed class FakePlexApi : IPlexWatchlistApi
+{
+    public const string Token = "good-token";
+
+    public Dictionary<string, (PlexItem Item, ExternalIds Ids)> Catalog { get; } = [];
+
+    public List<string> Watchlist { get; } = [];
+
+    public List<string> Added { get; } = [];
+
+    public List<string> Removed { get; } = [];
+
+    public PlexAccount Account { get; set; } = new("uuid-alice", "alice");
+
+    /// <summary>When set, GetWatchlist throws it.</summary>
+    public Exception? WatchlistFailure { get; set; }
+
+    /// <summary>When true, every call throws <see cref="PlexUnauthorizedException"/>.</summary>
+    public bool Revoked { get; set; }
+
+    /// <summary>When set, GetWatchlist signals <see cref="Entered"/> and waits for this before answering.</summary>
+    public TaskCompletionSource? Gate { get; set; }
+
+    public TaskCompletionSource Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    /// <summary>When set, Add signals <see cref="AddEntered"/> and waits for this before recording the add.</summary>
+    public TaskCompletionSource? AddGate { get; set; }
+
+    public TaskCompletionSource AddEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    public void Title(string key, WatchlistType type, string title, ExternalIds ids, bool onWatchlist = false)
+    {
+        Catalog[key] = (new PlexItem(key, type, title, 2020, "https://thumb.example/" + key), ids);
+        if (onWatchlist)
+        {
+            Watchlist.Add(key);
+        }
+    }
+
+    public Task<PlexAccount> GetAccount(string token, CancellationToken ct)
+    {
+        Check(token);
+        return Task.FromResult(Account);
+    }
+
+    public async Task<IReadOnlyList<PlexItem>> GetWatchlist(string token, CancellationToken ct)
+    {
+        Check(token);
+        if (Gate is not null)
+        {
+            Entered.TrySetResult();
+            await Gate.Task.ConfigureAwait(false);
+        }
+
+        if (WatchlistFailure is not null)
+        {
+            throw WatchlistFailure;
+        }
+
+        return Watchlist.Select(k => Catalog[k].Item).ToList();
+    }
+
+    public Task<ExternalIds> GetIds(string token, string ratingKey, CancellationToken ct)
+    {
+        Check(token);
+        return Task.FromResult(Catalog[ratingKey].Ids);
+    }
+
+    public Task<string?> FindRatingKey(string token, WatchlistType type, ExternalIds ids, CancellationToken ct)
+    {
+        Check(token);
+        var hit = Catalog.FirstOrDefault(c => c.Value.Item.Type == type && c.Value.Ids.Agrees(ids));
+        return Task.FromResult<string?>(hit.Key);
+    }
+
+    public async Task Add(string token, string ratingKey, CancellationToken ct)
+    {
+        Check(token);
+        if (AddGate is not null)
+        {
+            AddEntered.TrySetResult();
+            await AddGate.Task.ConfigureAwait(false);
+        }
+
+        Added.Add(ratingKey);
+        if (!Watchlist.Contains(ratingKey))
+        {
+            Watchlist.Add(ratingKey);
+        }
+    }
+
+    public Task Remove(string token, string ratingKey, CancellationToken ct)
+    {
+        Check(token);
+        Removed.Add(ratingKey);
+        Watchlist.Remove(ratingKey);
+        return Task.CompletedTask;
+    }
+
+    private void Check(string token)
+    {
+        if (Revoked || token != Token)
+        {
+            throw new PlexUnauthorizedException();
+        }
+    }
+}
