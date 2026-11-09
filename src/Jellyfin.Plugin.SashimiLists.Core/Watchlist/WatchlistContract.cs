@@ -43,9 +43,16 @@ public static class WatchlistContract
             e.Ids.Tmdb,
             e.Ids.Tvdb,
             e.Ids.Imdb,
-            e.AddedAt,
+            FormatTime(e.AddedAt),
             e.ItemId);
     }
+
+    /// <summary>
+    /// ISO-8601 in UTC with whole seconds and a <c>Z</c>: the strictest common
+    /// parser (Swift's <c>.iso8601</c>) rejects fractional seconds.
+    /// </summary>
+    public static string FormatTime(DateTimeOffset time)
+        => time.ToUniversalTime().ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", System.Globalization.CultureInfo.InvariantCulture);
 
     public static AddItemResponseDto ToAddResponse(EntryView entry, bool added) => new(ToDto(entry), added);
 
@@ -183,7 +190,7 @@ public sealed record WatchlistEntryDto(
     [property: JsonPropertyName("tmdbId")] string? TmdbId,
     [property: JsonPropertyName("tvdbId")] string? TvdbId,
     [property: JsonPropertyName("imdbId")] string? ImdbId,
-    [property: JsonPropertyName("addedAt")] DateTimeOffset AddedAt,
+    [property: JsonPropertyName("addedAt")] string AddedAt,
     [property: JsonPropertyName("itemId")] string? ItemId);
 
 public sealed record AddItemResponseDto(

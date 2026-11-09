@@ -37,6 +37,18 @@ public class WatchlistContractTests
     }
 
     [Fact]
+    public void AddedAt_is_whole_seconds_UTC_with_Z()
+    {
+        // Swift's .iso8601 date decoding rejects fractional seconds and needs a zone.
+        var addedAt = new DateTimeOffset(2026, 11, 9, 10, 3, 12, 345, TimeSpan.FromHours(-7)).AddTicks(6789);
+        var view = new WatchlistViewModel(null, false, [new EntryView(EntryId, WatchlistType.Movie, "M", null, null, new ExternalIds("1", null, null), addedAt, null)]);
+
+        var json = Body(Json(WatchlistContract.ToDto(view)));
+
+        Assert.Equal("2026-11-09T17:03:12Z", json.GetProperty("entries")[0].GetProperty("addedAt").GetString());
+    }
+
+    [Fact]
     public void Unlinked_view_has_null_plex_and_null_optional_fields()
     {
         var view = new WatchlistViewModel(null, false, [new EntryView(EntryId, WatchlistType.Movie, "M", null, null, new ExternalIds("1", null, null), DateTimeOffset.UnixEpoch, null)]);
