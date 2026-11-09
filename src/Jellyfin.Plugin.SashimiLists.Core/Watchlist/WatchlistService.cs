@@ -29,6 +29,9 @@ public sealed record Linked(PlexLinkView Link) : LinkResult;
 /// <summary>plex.tv rejected the token.</summary>
 public sealed record Rejected : LinkResult;
 
+/// <summary>plex.tv was unreachable, timed out, or answered with an error, so the token couldn't be checked.</summary>
+public sealed record PlexUnavailable : LinkResult;
+
 /// <summary>
 /// Already linked to a different Plex account and the caller didn't ask to replace it.
 /// <paramref name="Username"/> is the linked account, <paramref name="NewUsername"/> the token's.
@@ -166,6 +169,13 @@ public class WatchlistService
         catch (PlexUnauthorizedException)
         {
             return new Rejected();
+        }
+        catch (Exception e) when (e is HttpRequestException or FormatException
+            || (e is OperationCanceledException && !ct.IsCancellationRequested))
+        {
+            // plex.tv down, unreachable, timed out (not the caller cancelling), or
+            // answering nonsense: the token wasn't judged either way.
+            return new PlexUnavailable();
         }
 
         return _store.Update<LinkResult>(user, w =>

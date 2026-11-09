@@ -92,6 +92,7 @@ public class WatchlistController : ControllerBase
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
     [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
     public async Task<IActionResult> LinkPlex([FromBody] JsonElement body, CancellationToken ct)
     {
         if (!TryGetCaller(out var user))

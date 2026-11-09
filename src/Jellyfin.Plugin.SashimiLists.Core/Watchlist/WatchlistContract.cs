@@ -59,12 +59,14 @@ public static class WatchlistContract
     /// <summary>
     /// Status and body for <c>POST /SashimiLists/Watchlist/Plex</c>. A rejected
     /// token is 422, never 401: clients read any 401 as an expired Jellyfin session.
+    /// plex.tv unreachable or failing is 503.
     /// </summary>
     public static (int Status, object? Body) ForLink(LinkResult result) => result switch
     {
         Linked linked => (200, ToDto(linked.Link)),
         ConflictsWith conflict => (409, new LinkConflictDto(conflict.Username, conflict.NewUsername)),
         Rejected => (422, null),
+        PlexUnavailable => (503, null),
         _ => throw new ArgumentOutOfRangeException(nameof(result)),
     };
 

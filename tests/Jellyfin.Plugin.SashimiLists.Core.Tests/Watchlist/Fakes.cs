@@ -106,9 +106,17 @@ internal sealed class FakePlexApi : IPlexWatchlistApi
         }
     }
 
+    /// <summary>When set, GetAccount throws it.</summary>
+    public Exception? AccountFailure { get; set; }
+
     public Task<PlexAccount> GetAccount(string token, CancellationToken ct)
     {
         Check(token);
+        if (AccountFailure is not null)
+        {
+            throw AccountFailure;
+        }
+
         return Task.FromResult(Account);
     }
 

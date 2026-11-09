@@ -1,6 +1,6 @@
 {
   "category": "General",
-  "changelog": "Watchlist: a per-user watchlist that can hold titles not on the server, with optional two-way Plex sync.",
+  "changelog": "Watchlist fixes: 503 when plex.tv is unreachable during linking; relinking mid-sync keeps the first-sync merge; Plex titles without ids are retried; faster Watchlist loading; no early drop-off from a dateless played save.",
   "description": "Tells signed-in users who owns a playlist they can see, so shared lists keep their creator even after Jellyfin drops a playlist's shares, and keeps each user's Watchlist, which can hold titles not on the server and can sync with their own Plex watchlist.",
   "guid": "d95b4484-62cb-4873-92c5-66a65b86b420",
   "name": "Sashimi Lists",
@@ -8,7 +8,7 @@
   "owner": "Bitstorm Labs",
   "targetAbi": "12.4.0.0",
   "timestamp": "2026-11-09T00:00:00.0000000Z",
-  "version": "0.2.0.0",
+  "version": "0.2.1.0",
   "status": "Active",
   "autoUpdate": false,
   "assemblies": []

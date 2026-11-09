@@ -103,6 +103,9 @@ Body `{ "token": "<the user's plex.tv token>", "replace": false }`.
   A successful link starts a sync straight away.
 - `422` when plex.tv rejects the token (not `401`: clients treat any `401` as
   an expired Jellyfin session).
+- `503` (no body) when plex.tv is unreachable, times out or returns an error,
+  so the token couldn't be checked. Nothing is stored; try again later.
+  (Since 0.2.1.)
 - `409 { "username", "newUsername" }` when the Watchlist is linked to a
   different Plex account and `replace` is false. `username` is the linked
   account, `newUsername` the account the token belongs to.
@@ -125,9 +128,13 @@ Body `{ "token": "<the user's plex.tv token>", "replace": false }`.
   `needsReconnect` turns `true`; nothing is deleted. Linking again resumes.
 - If plex.tv fails mid-sync, nothing from that run is saved, so a later run
   never mistakes missing items for removals.
+- A Plex title that Plex hasn't matched to a TMDB/TVDB/IMDb id yet isn't
+  imported; every run retries it, and the log notes how many are waiting
+  (a count, never titles).
 - **Finished titles drop off**: a movie when it is played, a show when the
   user has no unplayed regular episodes left. Only a play newer than the
   entry's `addedAt` counts, so re-adding something already watched keeps it.
+  A generic user-data save counts only when it carries a play date.
   Linked users' Plex watchlists lose the title too.
 - When a Jellyfin user is deleted, their Watchlist is removed on the next
   scheduled run.
