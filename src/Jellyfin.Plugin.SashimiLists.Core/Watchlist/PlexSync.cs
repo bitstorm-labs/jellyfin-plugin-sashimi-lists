@@ -126,6 +126,13 @@ public class PlexSync
 
                     break;
                 case PushRemove remove:
+                    // Another entry still holds this title (re-added, or a second entry
+                    // Plex resolves to the same title): it stays on Plex.
+                    if (Held(remove.RatingKey))
+                    {
+                        break;
+                    }
+
                     if (onPlex.Contains(remove.RatingKey))
                     {
                         await _plex.Remove(token, remove.RatingKey, ct).ConfigureAwait(false);
@@ -177,10 +184,16 @@ public class PlexSync
             {
                 await PushEntry(entry).ConfigureAwait(false);
             }
+
+            // Plex's matcher can tie a local entry to a Plex item whose reported ids
+            // share none with it; that item is the entry, not a new title.
+            plan.Imports.RemoveAll(i => entries.Any(e => KeyOf(e) == i.PlexRatingKey));
         }
         else
         {
-            foreach (var key in state.LastPlexSnapshot.Where(k => !onPlex.Contains(k)))
+            // Judge removals by what Plex reported, not by the set this run's own
+            // PushRemove ops already changed.
+            foreach (var key in state.LastPlexSnapshot.Where(k => !plexItems.ContainsKey(k)))
             {
                 plan.RemovedOnPlex.Add(key);
             }
@@ -215,7 +228,8 @@ public class PlexSync
 
         foreach (var import in plan.Imports)
         {
-            var existing = w.Entries.FirstOrDefault(e => WatchlistService.SameTitle(e.Type, e.Ids, import.Type, import.Ids));
+            var existing = w.Entries.FirstOrDefault(e =>
+                e.PlexRatingKey == import.PlexRatingKey || WatchlistService.SameTitle(e.Type, e.Ids, import.Type, import.Ids));
             if (existing is null)
             {
                 w.Entries.Add(import);

@@ -56,6 +56,9 @@ internal sealed class FakePlexApi : IPlexWatchlistApi
 
     public List<string> Watchlist { get; } = [];
 
+    /// <summary>Extra ids FindRatingKey matches on but GetIds doesn't report (Plex's matcher knows more than the Guid list).</summary>
+    public Dictionary<string, ExternalIds> MatchAliases { get; } = [];
+
     public List<string> Added { get; } = [];
 
     public List<string> Removed { get; } = [];
@@ -122,7 +125,8 @@ internal sealed class FakePlexApi : IPlexWatchlistApi
     public Task<string?> FindRatingKey(string token, WatchlistType type, ExternalIds ids, CancellationToken ct)
     {
         Check(token);
-        var hit = Catalog.FirstOrDefault(c => c.Value.Item.Type == type && c.Value.Ids.Agrees(ids));
+        var hit = Catalog.FirstOrDefault(c => c.Value.Item.Type == type
+            && (c.Value.Ids.Agrees(ids) || (MatchAliases.TryGetValue(c.Key, out var alias) && alias.Agrees(ids))));
         return Task.FromResult<string?>(hit.Key);
     }
 

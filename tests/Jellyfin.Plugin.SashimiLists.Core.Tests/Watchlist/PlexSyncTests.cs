@@ -279,4 +279,69 @@ public sealed class PlexSyncTests : IDisposable
         Assert.Equal(2, _plex.WatchlistCalls);
         Assert.Equal(["kD"], _plex.Added); // pushed once, not by both
     }
+
+    [Fact]
+    public async Task Title_removed_and_readded_during_a_sync_survives_on_both_sides()
+    {
+        // Review finding: the merge queued PushRemove(k) after the re-add's PushAdd,
+        // and the next sync read its own removal as a removal on Plex.
+        _plex.Title("kD", WatchlistType.Movie, "Dune", new ExternalIds("438631", null, null));
+        var first = _service.Add(Alice, Movie("Dune", tmdb: "438631")).Entry;
+        Link(firstSyncDone: false);
+        _plex.AddGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var syncing = _sync.SyncUser(Alice, CancellationToken.None);
+        await _plex.AddEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        _service.Remove(Alice, first.Id);
+        var again = _service.Add(Alice, Movie("Dune", tmdb: "438631")).Entry;
+        _plex.AddGate.SetResult();
+        await syncing.WaitAsync(TimeSpan.FromSeconds(5));
+        _plex.AddGate = null;
+
+        await _sync.SyncUser(Alice, CancellationToken.None);
+        await _sync.SyncUser(Alice, CancellationToken.None);
+
+        var entry = Assert.Single(Stored.Entries);
+        Assert.Equal(again.Id, entry.Id);
+        Assert.Equal("kD", entry.PlexRatingKey);
+        Assert.Equal(["kD"], _plex.Watchlist);
+        Assert.Empty(Stored.Outbox);
+    }
+
+    [Fact]
+    public async Task Removing_one_of_two_entries_on_the_same_Plex_title_keeps_the_other()
+    {
+        // No shared id, so they are two entries, but Plex resolves both to one title.
+        _plex.Title("kD", WatchlistType.Movie, "Dune", new ExternalIds("438631", null, "tt1160419"));
+        await LinkedAndSynced();
+        var byTmdb = _service.Add(Alice, Movie("Dune", tmdb: "438631")).Entry;
+        var byImdb = _service.Add(Alice, new NewEntry(WatchlistType.Movie, "Dune", 2021, null, new ExternalIds(null, null, "tt1160419"))).Entry;
+        await _sync.SyncUser(Alice, CancellationToken.None);
+        Assert.All(Stored.Entries, e => Assert.Equal("kD", e.PlexRatingKey));
+
+        _service.Remove(Alice, byTmdb.Id);
+        await _sync.SyncUser(Alice, CancellationToken.None);
+        await _sync.SyncUser(Alice, CancellationToken.None);
+
+        Assert.Equal(byImdb.Id, Assert.Single(Stored.Entries).Id);
+        Assert.Equal(["kD"], _plex.Watchlist);
+    }
+
+    [Fact]
+    public async Task First_sync_does_not_duplicate_a_title_whose_ids_only_Plex_can_match()
+    {
+        // The Plex item reports only a tvdb id; the local entry has only tmdb,
+        // yet Plex's matcher resolves the local entry to the same ratingKey.
+        _plex.Title("kS", WatchlistType.Series, "Show", new ExternalIds(null, "T1", null), onWatchlist: true);
+        _plex.MatchAliases["kS"] = new ExternalIds("M1", null, null);
+        var local = _service.Add(Alice, new NewEntry(WatchlistType.Series, "Show", 2020, null, new ExternalIds("M1", null, null))).Entry;
+        Link(firstSyncDone: false);
+
+        await _sync.SyncUser(Alice, CancellationToken.None);
+
+        var entry = Assert.Single(Stored.Entries);
+        Assert.Equal(local.Id, entry.Id);
+        Assert.Equal("kS", entry.PlexRatingKey);
+        Assert.Empty(_plex.Added);
+    }
 }
