@@ -120,6 +120,49 @@ public sealed class WatchlistStoreTests : IDisposable
     }
 
     [Fact]
+    public void Files_holding_Plex_tokens_are_owner_only_on_unix()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return; // Unix permissions only.
+        }
+
+        // A directory that already exists with loose permissions is tightened too.
+        Directory.CreateDirectory(_dir, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute
+            | UnixFileMode.GroupRead | UnixFileMode.GroupExecute | UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
+        File.SetUnixFileMode(_dir, (UnixFileMode)0b111_101_101); // 0755 regardless of umask
+
+        var store = new FileWatchlistStore(_dir);
+        store.Update(Alice, w =>
+        {
+            w.Plex = new PlexLinkState { Token = "secret", AccountUuid = "u", Username = "alice" };
+            return 0;
+        });
+
+        Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, File.GetUnixFileMode(Path.Combine(_dir, Alice.ToString("N") + ".json")));
+        Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute, File.GetUnixFileMode(_dir));
+    }
+
+    [Fact]
+    public void A_new_directory_is_created_owner_only_on_unix()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var nested = Path.Combine(_dir, "watchlists");
+        new FileWatchlistStore(nested).Update(Bob, w =>
+        {
+            w.CardDismissed = true;
+            return 0;
+        });
+
+        Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute, File.GetUnixFileMode(nested));
+        Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, File.GetUnixFileMode(Path.Combine(nested, Bob.ToString("N") + ".json")));
+    }
+
+    [Fact]
     public void ExternalIds_Agrees_on_any_shared_id_and_not_on_disjoint()
     {
         var a = new ExternalIds("100", null, "tt0001");

@@ -7,7 +7,8 @@ namespace Jellyfin.Plugin.SashimiLists.Core.Watchlist;
 /// <summary>
 /// One <c>{userId:N}.json</c> per user. Writes go to a temp file and are moved
 /// over the old one, so a crash never leaves half a file. A per-user lock makes
-/// each <see cref="Update{T}"/> an atomic read-modify-write.
+/// each <see cref="Update{T}"/> an atomic read-modify-write. The files hold
+/// Plex tokens, so on Unix the directory is 0700 and each file 0600.
 /// </summary>
 public sealed class FileWatchlistStore : IWatchlistStore
 {
@@ -18,7 +19,11 @@ public sealed class FileWatchlistStore : IWatchlistStore
     };
 
     private readonly string _directory;
+    private const UnixFileMode DirectoryMode = UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute;
+    private const UnixFileMode FileMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
+
     private readonly ConcurrentDictionary<Guid, object> _locks = new();
+    private volatile bool _directoryReady;
 
     public FileWatchlistStore(string directory)
     {
@@ -89,10 +94,41 @@ public sealed class FileWatchlistStore : IWatchlistStore
 
     private void Save(Guid userId, UserWatchlist watchlist)
     {
-        Directory.CreateDirectory(_directory);
+        EnsureDirectory();
         var path = PathFor(userId);
         var temp = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
-        File.WriteAllBytes(temp, JsonSerializer.SerializeToUtf8Bytes(watchlist, Json));
+        var options = new FileStreamOptions { Mode = System.IO.FileMode.CreateNew, Access = FileAccess.Write };
+        if (!OperatingSystem.IsWindows())
+        {
+            options.UnixCreateMode = FileMode;
+        }
+
+        using (var stream = new FileStream(temp, options))
+        {
+            JsonSerializer.Serialize(stream, watchlist, Json);
+        }
+
         File.Move(temp, path, overwrite: true);
+    }
+
+    private void EnsureDirectory()
+    {
+        if (_directoryReady)
+        {
+            return;
+        }
+
+        if (OperatingSystem.IsWindows())
+        {
+            Directory.CreateDirectory(_directory);
+        }
+        else
+        {
+            Directory.CreateDirectory(_directory, DirectoryMode);
+            // CreateDirectory leaves an existing directory's mode alone; tighten it.
+            File.SetUnixFileMode(_directory, DirectoryMode);
+        }
+
+        _directoryReady = true;
     }
 }
