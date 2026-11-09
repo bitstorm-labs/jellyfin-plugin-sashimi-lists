@@ -6,6 +6,7 @@ using MediaBrowser.Controller.Library;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 
 namespace Jellyfin.Plugin.SashimiLists.Watchlist;
 
@@ -25,13 +26,17 @@ public class WatchlistController : ControllerBase
 
     private readonly WatchlistService _service;
     private readonly PosterFinder _posters;
+    private readonly PlexSync _sync;
     private readonly IUserManager _userManager;
+    private readonly ILogger<WatchlistController> _logger;
 
-    public WatchlistController(WatchlistService service, PosterFinder posters, IUserManager userManager)
+    public WatchlistController(WatchlistService service, PosterFinder posters, PlexSync sync, IUserManager userManager, ILogger<WatchlistController> logger)
     {
         _service = service;
         _posters = posters;
+        _sync = sync;
         _userManager = userManager;
+        _logger = logger;
     }
 
     [HttpGet]
@@ -105,6 +110,22 @@ public class WatchlistController : ControllerBase
         }
 
         var result = await _service.LinkPlex(user, token, replace, ct).ConfigureAwait(false);
+        if (result is Linked)
+        {
+            // Sync now rather than at the next scheduled run; the response doesn't wait for it.
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await _sync.SyncUser(user, CancellationToken.None).ConfigureAwait(false);
+                }
+                catch (Exception e)
+                {
+                    _logger.LogWarning("Watchlist sync after linking Plex failed for user {UserId}: {Error}", user.ToString("N"), e.GetType().Name);
+                }
+            });
+        }
+
         var (status, response) = WatchlistContract.ForLink(result);
         return response is null ? StatusCode(status) : Json(response, status);
     }

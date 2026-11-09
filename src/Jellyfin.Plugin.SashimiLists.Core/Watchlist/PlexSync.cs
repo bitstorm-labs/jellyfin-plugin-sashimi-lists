@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+
 namespace Jellyfin.Plugin.SashimiLists.Core.Watchlist;
 
 /// <summary>
@@ -11,6 +13,10 @@ public class PlexSync
     private readonly IWatchlistStore _store;
     private readonly IPlexWatchlistApi _plex;
     private readonly IClock _clock;
+
+    // One sync per user at a time: the scheduled run and a link-triggered run
+    // would otherwise both push the same outbox.
+    private readonly ConcurrentDictionary<Guid, SemaphoreSlim> _running = new();
 
     public PlexSync(IWatchlistStore store, IPlexWatchlistApi plex, IClock clock)
     {
@@ -26,6 +32,20 @@ public class PlexSync
     /// good snapshot.
     /// </summary>
     public async Task SyncUser(Guid user, CancellationToken ct)
+    {
+        var gate = _running.GetOrAdd(user, _ => new SemaphoreSlim(1, 1));
+        await gate.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            await SyncUserLocked(user, ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
+    private async Task SyncUserLocked(Guid user, CancellationToken ct)
     {
         var state = _store.Read(user);
         var link = state.Plex;

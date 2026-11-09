@@ -257,4 +257,26 @@ public sealed class PlexSyncTests : IDisposable
         Assert.Empty(_plex.Watchlist);
         Assert.Empty(Stored.Entries);
     }
+
+    [Fact]
+    public async Task Two_syncs_of_one_user_run_one_at_a_time()
+    {
+        _plex.Title("kD", WatchlistType.Movie, "Dune", new ExternalIds("438631", null, null));
+        await LinkedAndSynced();
+        _service.Add(Alice, Movie("Dune", tmdb: "438631"));
+        _plex.WatchlistCalls = 0;
+        _plex.Gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var first = _sync.SyncUser(Alice, CancellationToken.None);
+        await _plex.Entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        var second = _sync.SyncUser(Alice, CancellationToken.None);
+        await Task.Delay(100);
+        Assert.Equal(1, _plex.WatchlistCalls); // the second waits for the first
+
+        _plex.Gate.SetResult();
+        await Task.WhenAll(first, second).WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Equal(2, _plex.WatchlistCalls);
+        Assert.Equal(["kD"], _plex.Added); // pushed once, not by both
+    }
 }

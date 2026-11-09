@@ -93,9 +93,12 @@ internal sealed class FakePlexApi : IPlexWatchlistApi
         return Task.FromResult(Account);
     }
 
+    public int WatchlistCalls;
+
     public async Task<IReadOnlyList<PlexItem>> GetWatchlist(string token, CancellationToken ct)
     {
         Check(token);
+        Interlocked.Increment(ref WatchlistCalls);
         if (Gate is not null)
         {
             Entered.TrySetResult();

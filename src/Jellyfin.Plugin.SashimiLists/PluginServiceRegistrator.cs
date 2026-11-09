@@ -21,5 +21,6 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
         serviceCollection.AddSingleton<WatchlistService>();
         serviceCollection.AddSingleton<PlexSync>();
         serviceCollection.AddSingleton<PosterFinder>();
+        serviceCollection.AddHostedService<WatchlistPlayedListener>();
     }
 }
