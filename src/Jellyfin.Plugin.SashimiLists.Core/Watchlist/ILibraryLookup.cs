@@ -9,6 +9,12 @@ public interface ILibraryLookup
     /// or null when there is none.
     /// </summary>
     string? FindVisibleItemId(Guid userId, WatchlistType type, ExternalIds ids);
+
+    /// <summary>
+    /// <see cref="FindVisibleItemId"/> for many titles in as few library queries
+    /// as possible; the result lines up with <paramref name="titles"/>.
+    /// </summary>
+    IReadOnlyList<string?> FindVisibleItemIds(Guid userId, IReadOnlyList<(WatchlistType Type, ExternalIds Ids)> titles);
 }
 
 /// <summary>The current time; swapped for a fake in tests.</summary>

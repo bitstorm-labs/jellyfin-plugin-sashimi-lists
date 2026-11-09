@@ -58,10 +58,10 @@ public class WatchlistService
     public WatchlistViewModel View(Guid user)
     {
         var watchlist = _store.Read(user);
-        var entries = watchlist.Entries
-            .OrderByDescending(e => e.AddedAt)
-            .Select(e => ToView(user, e))
-            .ToList();
+        var ordered = watchlist.Entries.OrderByDescending(e => e.AddedAt).ToList();
+        // One batched library lookup for the whole list, not one per entry.
+        var itemIds = ordered.Count == 0 ? [] : _library.FindVisibleItemIds(user, ordered.Select(e => (e.Type, e.Ids)).ToList());
+        var entries = ordered.Select((e, i) => ToView(e, itemIds[i])).ToList();
         var plex = watchlist.Plex is null ? null : new PlexLinkView(watchlist.Plex.Username, watchlist.Plex.NeedsReconnect);
         return new WatchlistViewModel(plex, watchlist.CardDismissed, entries);
     }
@@ -107,6 +107,29 @@ public class WatchlistService
         });
 
         return (ToView(user, stored), added);
+    }
+
+    /// <summary>
+    /// <see cref="Add"/>, filling a missing poster from <paramref name="posterSource"/>
+    /// only when the title is actually new.
+    /// </summary>
+    public async Task<(EntryView Entry, bool Added)> AddAsync(Guid user, NewEntry entry, Func<CancellationToken, Task<string?>> posterSource, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+        ArgumentNullException.ThrowIfNull(posterSource);
+        // Already listed: return it without a (slow, remote) poster lookup.
+        var existing = _store.Read(user).Entries.FirstOrDefault(e => SameTitle(e.Type, e.Ids, entry.Type, entry.Ids));
+        if (existing is not null)
+        {
+            return (ToView(user, existing), false);
+        }
+
+        if (PosterUrls.Clean(entry.PosterUrl) is null)
+        {
+            entry = entry with { PosterUrl = await posterSource(ct).ConfigureAwait(false) };
+        }
+
+        return Add(user, entry);
     }
 
     /// <summary>Removes the entry; does nothing when it is already gone.</summary>
@@ -224,7 +247,9 @@ public class WatchlistService
         }
     }
 
-    private EntryView ToView(Guid user, WatchlistEntry e) => new(
+    private EntryView ToView(Guid user, WatchlistEntry e) => ToView(e, _library.FindVisibleItemId(user, e.Type, e.Ids));
+
+    private static EntryView ToView(WatchlistEntry e, string? itemId) => new(
         e.Id,
         e.Type,
         e.Title,
@@ -232,5 +257,5 @@ public class WatchlistService
         e.PosterUrl,
         e.Ids,
         e.AddedAt,
-        _library.FindVisibleItemId(user, e.Type, e.Ids));
+        itemId);
 }

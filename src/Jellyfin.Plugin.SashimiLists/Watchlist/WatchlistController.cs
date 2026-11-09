@@ -66,12 +66,7 @@ public class WatchlistController : ControllerBase
             return BadRequest("Only movies and series with a TMDB, TVDB or IMDb id can go on the Watchlist.");
         }
 
-        if (PosterUrls.Clean(entry.PosterUrl) is null)
-        {
-            entry = entry with { PosterUrl = await _posters.Find(user, entry.Type, entry.Ids, ct).ConfigureAwait(false) };
-        }
-
-        var (view, added) = _service.Add(user, entry);
+        var (view, added) = await _service.AddAsync(user, entry, c => _posters.Find(user, entry.Type, entry.Ids, c), ct).ConfigureAwait(false);
         return Json(WatchlistContract.ToAddResponse(view, added));
     }
 

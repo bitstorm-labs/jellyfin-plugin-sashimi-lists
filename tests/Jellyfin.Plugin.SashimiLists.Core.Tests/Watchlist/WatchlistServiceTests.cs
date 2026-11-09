@@ -160,6 +160,56 @@ public sealed class WatchlistServiceTests : IDisposable
     }
 
     [Fact]
+    public void View_looks_up_the_library_once_for_the_whole_list()
+    {
+        _service.Add(Alice, Movie("a", tmdb: "1"));
+        _service.Add(Alice, Movie("b", tmdb: "2"));
+        _service.Add(Alice, Movie("c", tmdb: "3"));
+        _library.Visible[(Alice, "2")] = "item2";
+        var before = (_library.SingleCalls, _library.BatchCalls);
+
+        var view = _service.View(Alice);
+
+        Assert.Equal((before.SingleCalls, before.BatchCalls + 1), (_library.SingleCalls, _library.BatchCalls));
+        Assert.Equal("item2", view.Entries.Single(e => e.Title == "b").ItemId);
+        Assert.Null(view.Entries.Single(e => e.Title == "a").ItemId);
+    }
+
+    [Fact]
+    public async Task AddAsync_of_a_title_already_listed_does_not_look_up_a_poster()
+    {
+        _service.Add(Alice, Movie("Dune", tmdb: "438631"));
+        var lookups = 0;
+
+        var (entry, added) = await _service.AddAsync(Alice, Movie("Dune", tmdb: "438631"), _ =>
+        {
+            lookups++;
+            return Task.FromResult<string?>("https://image.example/p.jpg");
+        }, CancellationToken.None);
+
+        Assert.False(added);
+        Assert.Equal(0, lookups);
+        Assert.Null(entry.PosterUrl);
+    }
+
+    [Fact]
+    public async Task AddAsync_without_a_poster_fills_it_from_the_source()
+    {
+        var (entry, added) = await _service.AddAsync(Alice, Movie("Dune", tmdb: "438631"), _ => Task.FromResult<string?>("https://image.example/p.jpg"), CancellationToken.None);
+
+        Assert.True(added);
+        Assert.Equal("https://image.example/p.jpg", entry.PosterUrl);
+    }
+
+    [Fact]
+    public async Task AddAsync_with_a_poster_does_not_ask_the_source()
+    {
+        var (entry, _) = await _service.AddAsync(Alice, Movie("Dune", tmdb: "438631") with { PosterUrl = "https://image.example/given.jpg" }, _ => throw new InvalidOperationException("asked"), CancellationToken.None);
+
+        Assert.Equal("https://image.example/given.jpg", entry.PosterUrl);
+    }
+
+    [Fact]
     public void DismissCard_is_remembered()
     {
         _service.DismissCard(Alice);
