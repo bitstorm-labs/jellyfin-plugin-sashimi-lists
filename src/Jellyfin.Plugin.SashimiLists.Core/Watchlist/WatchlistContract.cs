@@ -22,7 +22,8 @@ public static class WatchlistContract
         return new WatchlistViewDto(
             view.Plex is null ? null : ToDto(view.Plex),
             view.CardDismissed,
-            view.Entries.Select(ToDto).ToList());
+            view.Entries.Select(ToDto).ToList(),
+            view.PlexOptedOut);
     }
 
     public static PlexLinkDto ToDto(PlexLinkView link)
@@ -177,7 +178,8 @@ public static class WatchlistContract
 public sealed record WatchlistViewDto(
     [property: JsonPropertyName("plex")] PlexLinkDto? Plex,
     [property: JsonPropertyName("cardDismissed")] bool CardDismissed,
-    [property: JsonPropertyName("entries")] IReadOnlyList<WatchlistEntryDto> Entries);
+    [property: JsonPropertyName("entries")] IReadOnlyList<WatchlistEntryDto> Entries,
+    [property: JsonPropertyName("plexOptedOut")] bool PlexOptedOut);
 
 public sealed record PlexLinkDto(
     [property: JsonPropertyName("username")] string Username,

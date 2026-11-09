@@ -108,6 +108,12 @@ public sealed class UserWatchlist
 
     public bool CardDismissed { get; set; }
 
+    /// <summary>
+    /// The user disconnected Plex. Clients skip auto-linking (e.g. on a Requests
+    /// sign-in) while this is set; an explicit, successful link clears it.
+    /// </summary>
+    public bool PlexOptedOut { get; set; }
+
     /// <summary>The ratingKeys on the user's Plex watchlist at the end of the last successful sync.</summary>
     public HashSet<string> LastPlexSnapshot { get; set; } = new(StringComparer.Ordinal);
 

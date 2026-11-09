@@ -147,4 +147,53 @@ public sealed class PlexLinkTests : IDisposable
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => _service.LinkPlex(Alice, FakePlexApi.Token, replace: false, cts.Token));
     }
+
+    [Fact]
+    public async Task Unlink_records_the_opt_out_and_view_shows_it()
+    {
+        Assert.False(_service.View(Alice).PlexOptedOut);
+        await _service.LinkPlex(Alice, FakePlexApi.Token, replace: false, CancellationToken.None);
+
+        _service.UnlinkPlex(Alice);
+
+        Assert.True(Stored.PlexOptedOut);
+        Assert.True(_service.View(Alice).PlexOptedOut);
+    }
+
+    [Fact]
+    public async Task A_successful_link_clears_the_opt_out()
+    {
+        _service.UnlinkPlex(Alice);
+
+        Assert.IsType<Linked>(await _service.LinkPlex(Alice, FakePlexApi.Token, replace: false, CancellationToken.None));
+
+        Assert.False(_service.View(Alice).PlexOptedOut);
+    }
+
+    [Fact]
+    public async Task A_failed_link_keeps_the_opt_out()
+    {
+        _service.UnlinkPlex(Alice);
+
+        Assert.IsType<Rejected>(await _service.LinkPlex(Alice, "bad-token", replace: false, CancellationToken.None));
+        _plex.AccountFailure = new HttpRequestException("down");
+        Assert.IsType<PlexUnavailable>(await _service.LinkPlex(Alice, FakePlexApi.Token, replace: false, CancellationToken.None));
+
+        Assert.True(_service.View(Alice).PlexOptedOut);
+    }
+
+    [Fact]
+    public async Task A_conflicting_link_keeps_the_opt_out()
+    {
+        Existing("uuid-other", "someone-else");
+        _temp.Store.Update(Alice, w =>
+        {
+            w.PlexOptedOut = true;
+            return 0;
+        });
+
+        Assert.IsType<ConflictsWith>(await _service.LinkPlex(Alice, FakePlexApi.Token, replace: false, CancellationToken.None));
+
+        Assert.True(_service.View(Alice).PlexOptedOut);
+    }
 }
