@@ -162,6 +162,42 @@ public sealed class WatchlistStoreTests : IDisposable
         Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, File.GetUnixFileMode(Path.Combine(nested, Bob.ToString("N") + ".json")));
     }
 
+    [Theory]
+    [InlineData("")]
+    [InlineData("{\"Entries\":[{\"Id\":")]
+    [InlineData("not json")]
+    public void Unreadable_file_is_moved_aside_reported_and_reads_as_empty(string content)
+    {
+        Directory.CreateDirectory(_dir);
+        var path = Path.Combine(_dir, Alice.ToString("N") + ".json");
+        File.WriteAllText(path, content);
+        var reported = new List<Guid>();
+        var store = new FileWatchlistStore(_dir, (user, _) => reported.Add(user));
+
+        var read = store.Read(Alice);
+
+        Assert.Empty(read.Entries);
+        Assert.Null(read.Plex);
+        Assert.Equal([Alice], reported);
+        Assert.False(File.Exists(path));
+        Assert.Equal(content, File.ReadAllText(Assert.Single(Directory.GetFiles(_dir, Alice.ToString("N") + ".json.corrupt-*"))));
+    }
+
+    [Fact]
+    public void One_unreadable_file_does_not_hide_other_linked_users()
+    {
+        var store = new FileWatchlistStore(_dir, (_, _) => { });
+        store.Update(Bob, w =>
+        {
+            w.Plex = new PlexLinkState { Token = "t", AccountUuid = "u", Username = "bob" };
+            return 0;
+        });
+        File.WriteAllText(Path.Combine(_dir, Alice.ToString("N") + ".json"), "{");
+
+        Assert.Equal([Bob], store.UsersWithPlex());
+        Assert.Equal([Bob], store.AllUsers());
+    }
+
     [Fact]
     public void ExternalIds_Agrees_on_any_shared_id_and_not_on_disjoint()
     {

@@ -4,6 +4,7 @@ using MediaBrowser.Common.Configuration;
 using MediaBrowser.Controller;
 using MediaBrowser.Controller.Plugins;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace Jellyfin.Plugin.SashimiLists;
 
@@ -12,8 +13,16 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
 {
     public void RegisterServices(IServiceCollection serviceCollection, IServerApplicationHost applicationHost)
     {
-        serviceCollection.AddSingleton<IWatchlistStore>(sp => new FileWatchlistStore(
-            Path.Combine(sp.GetRequiredService<IApplicationPaths>().DataPath, "sashimi-lists", "watchlists")));
+        serviceCollection.AddSingleton<IWatchlistStore>(sp =>
+        {
+            var logger = sp.GetRequiredService<ILoggerFactory>().CreateLogger<FileWatchlistStore>();
+            return new FileWatchlistStore(
+                Path.Combine(sp.GetRequiredService<IApplicationPaths>().DataPath, "sashimi-lists", "watchlists"),
+                (user, e) => logger.LogError(
+                    "Watchlist file for user {UserId} was unreadable ({Error}); moved it aside as .corrupt-* and started an empty Watchlist",
+                    user.ToString("N"),
+                    e.GetType().Name));
+        });
         serviceCollection.AddSingleton<IClock, SystemClock>();
         serviceCollection.AddSingleton<JellyfinLibraryLookup>();
         serviceCollection.AddSingleton<ILibraryLookup>(sp => sp.GetRequiredService<JellyfinLibraryLookup>());

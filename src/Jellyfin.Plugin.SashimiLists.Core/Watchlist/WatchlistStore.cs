@@ -25,9 +25,14 @@ public sealed class FileWatchlistStore : IWatchlistStore
     private readonly ConcurrentDictionary<Guid, object> _locks = new();
     private volatile bool _directoryReady;
 
-    public FileWatchlistStore(string directory)
+    private readonly Action<Guid, Exception>? _onCorrupt;
+
+    /// <param name="directory">Where the per-user files live.</param>
+    /// <param name="onCorrupt">Told when a user's file can't be read and is moved aside.</param>
+    public FileWatchlistStore(string directory, Action<Guid, Exception>? onCorrupt = null)
     {
         _directory = directory;
+        _onCorrupt = onCorrupt;
     }
 
     public T Update<T>(Guid userId, Func<UserWatchlist, T> change)
@@ -85,8 +90,23 @@ public sealed class FileWatchlistStore : IWatchlistStore
             return new UserWatchlist();
         }
 
-        using var stream = File.OpenRead(path);
-        var watchlist = JsonSerializer.Deserialize<UserWatchlist>(stream, Json) ?? new UserWatchlist();
+        UserWatchlist watchlist;
+        try
+        {
+            using var stream = File.OpenRead(path);
+            watchlist = JsonSerializer.Deserialize<UserWatchlist>(stream, Json) ?? new UserWatchlist();
+        }
+        catch (JsonException e)
+        {
+            // Keep the bytes for recovery, and let the user carry on with an empty
+            // (unlinked) list rather than a 500 on every request. Unlinked means no
+            // sync reads the empty list as removals.
+            var aside = path + ".corrupt-" + DateTime.UtcNow.ToString("yyyyMMddHHmmss", System.Globalization.CultureInfo.InvariantCulture);
+            File.Move(path, aside, overwrite: true);
+            _onCorrupt?.Invoke(userId, e);
+            return new UserWatchlist();
+        }
+
         // The deserializer builds a default-comparer set; keep ratingKeys ordinal.
         watchlist.LastPlexSnapshot = new HashSet<string>(watchlist.LastPlexSnapshot, StringComparer.Ordinal);
         return watchlist;
@@ -103,12 +123,22 @@ public sealed class FileWatchlistStore : IWatchlistStore
             options.UnixCreateMode = FileMode;
         }
 
-        using (var stream = new FileStream(temp, options))
+        try
         {
-            JsonSerializer.Serialize(stream, watchlist, Json);
-        }
+            using (var stream = new FileStream(temp, options))
+            {
+                JsonSerializer.Serialize(stream, watchlist, Json);
+                // On disk before the rename, so a power cut can't leave an empty file in its place.
+                stream.Flush(flushToDisk: true);
+            }
 
-        File.Move(temp, path, overwrite: true);
+            File.Move(temp, path, overwrite: true);
+        }
+        catch
+        {
+            File.Delete(temp);
+            throw;
+        }
     }
 
     private void EnsureDirectory()
