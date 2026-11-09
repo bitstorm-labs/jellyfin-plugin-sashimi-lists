@@ -117,4 +117,34 @@ public sealed class PlexLinkTests : IDisposable
         Assert.Equal("Kept", Assert.Single(stored.Entries).Title);
         Assert.Null(_service.View(Alice).Plex);
     }
+
+    public static TheoryData<Exception> PlexDown() => new()
+    {
+        new HttpRequestException("plex.tv returned HTTP 503.", null, System.Net.HttpStatusCode.ServiceUnavailable),
+        new HttpRequestException("Connection refused"),
+        new TaskCanceledException("timeout"),
+        new FormatException("garbled"),
+    };
+
+    [Theory]
+    [MemberData(nameof(PlexDown))]
+    public async Task Link_while_plex_tv_is_unreachable_is_Unavailable_and_stores_nothing(Exception failure)
+    {
+        _plex.AccountFailure = failure;
+
+        var result = await _service.LinkPlex(Alice, FakePlexApi.Token, replace: false, CancellationToken.None);
+
+        Assert.IsType<PlexUnavailable>(result);
+        Assert.Null(Stored.Plex);
+    }
+
+    [Fact]
+    public async Task Link_cancelled_by_the_caller_is_not_reported_as_Unavailable()
+    {
+        using var cts = new CancellationTokenSource();
+        await cts.CancelAsync();
+        _plex.AccountFailure = new TaskCanceledException("caller went away", null, cts.Token);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => _service.LinkPlex(Alice, FakePlexApi.Token, replace: false, cts.Token));
+    }
 }

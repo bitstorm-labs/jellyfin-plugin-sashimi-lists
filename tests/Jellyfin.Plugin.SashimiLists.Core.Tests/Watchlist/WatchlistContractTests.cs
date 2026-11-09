@@ -86,6 +86,11 @@ public class WatchlistContractTests
         var (rejected, rejectedBody) = WatchlistContract.ForLink(new Rejected());
         Assert.Equal(422, rejected);
         Assert.Null(rejectedBody);
+
+        // plex.tv down or unreachable: the server can't answer the question yet.
+        var (unavailable, unavailableBody) = WatchlistContract.ForLink(new PlexUnavailable());
+        Assert.Equal(503, unavailable);
+        Assert.Null(unavailableBody);
     }
 
     [Fact]

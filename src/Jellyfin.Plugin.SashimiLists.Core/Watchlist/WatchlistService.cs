@@ -29,6 +29,9 @@ public sealed record Linked(PlexLinkView Link) : LinkResult;
 /// <summary>plex.tv rejected the token.</summary>
 public sealed record Rejected : LinkResult;
 
+/// <summary>plex.tv was unreachable, timed out, or answered with an error, so the token couldn't be checked.</summary>
+public sealed record PlexUnavailable : LinkResult;
+
 /// <summary>
 /// Already linked to a different Plex account and the caller didn't ask to replace it.
 /// <paramref name="Username"/> is the linked account, <paramref name="NewUsername"/> the token's.
@@ -58,10 +61,10 @@ public class WatchlistService
     public WatchlistViewModel View(Guid user)
     {
         var watchlist = _store.Read(user);
-        var entries = watchlist.Entries
-            .OrderByDescending(e => e.AddedAt)
-            .Select(e => ToView(user, e))
-            .ToList();
+        var ordered = watchlist.Entries.OrderByDescending(e => e.AddedAt).ToList();
+        // One batched library lookup for the whole list, not one per entry.
+        var itemIds = ordered.Count == 0 ? [] : _library.FindVisibleItemIds(user, ordered.Select(e => (e.Type, e.Ids)).ToList());
+        var entries = ordered.Select((e, i) => ToView(e, itemIds[i])).ToList();
         var plex = watchlist.Plex is null ? null : new PlexLinkView(watchlist.Plex.Username, watchlist.Plex.NeedsReconnect);
         return new WatchlistViewModel(plex, watchlist.CardDismissed, entries);
     }
@@ -109,6 +112,29 @@ public class WatchlistService
         return (ToView(user, stored), added);
     }
 
+    /// <summary>
+    /// <see cref="Add"/>, filling a missing poster from <paramref name="posterSource"/>
+    /// only when the title is actually new.
+    /// </summary>
+    public async Task<(EntryView Entry, bool Added)> AddAsync(Guid user, NewEntry entry, Func<CancellationToken, Task<string?>> posterSource, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+        ArgumentNullException.ThrowIfNull(posterSource);
+        // Already listed: return it without a (slow, remote) poster lookup.
+        var existing = _store.Read(user).Entries.FirstOrDefault(e => SameTitle(e.Type, e.Ids, entry.Type, entry.Ids));
+        if (existing is not null)
+        {
+            return (ToView(user, existing), false);
+        }
+
+        if (PosterUrls.Clean(entry.PosterUrl) is null)
+        {
+            entry = entry with { PosterUrl = await posterSource(ct).ConfigureAwait(false) };
+        }
+
+        return Add(user, entry);
+    }
+
     /// <summary>Removes the entry; does nothing when it is already gone.</summary>
     public void Remove(Guid user, Guid entryId)
     {
@@ -144,6 +170,13 @@ public class WatchlistService
         {
             return new Rejected();
         }
+        catch (Exception e) when (e is HttpRequestException or FormatException
+            || (e is OperationCanceledException && !ct.IsCancellationRequested))
+        {
+            // plex.tv down, unreachable, timed out (not the caller cancelling), or
+            // answering nonsense: the token wasn't judged either way.
+            return new PlexUnavailable();
+        }
 
         return _store.Update<LinkResult>(user, w =>
         {
@@ -159,7 +192,7 @@ public class WatchlistService
             }
             else
             {
-                w.Plex = new PlexLinkState { Token = token, AccountUuid = account.Uuid, Username = account.Username };
+                w.Plex = new PlexLinkState { LinkId = Guid.NewGuid(), Token = token, AccountUuid = account.Uuid, Username = account.Username };
                 // Pending pushes and the snapshot belong to the previous account.
                 w.Outbox.Clear();
                 w.LastPlexSnapshot.Clear();
@@ -224,7 +257,9 @@ public class WatchlistService
         }
     }
 
-    private EntryView ToView(Guid user, WatchlistEntry e) => new(
+    private EntryView ToView(Guid user, WatchlistEntry e) => ToView(e, _library.FindVisibleItemId(user, e.Type, e.Ids));
+
+    private static EntryView ToView(WatchlistEntry e, string? itemId) => new(
         e.Id,
         e.Type,
         e.Title,
@@ -232,5 +267,5 @@ public class WatchlistService
         e.PosterUrl,
         e.Ids,
         e.AddedAt,
-        _library.FindVisibleItemId(user, e.Type, e.Ids));
+        itemId);
 }

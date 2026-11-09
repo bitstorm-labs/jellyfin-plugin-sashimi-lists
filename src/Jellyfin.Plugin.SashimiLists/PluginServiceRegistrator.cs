@@ -28,7 +28,19 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
         serviceCollection.AddSingleton<ILibraryLookup>(sp => sp.GetRequiredService<JellyfinLibraryLookup>());
         serviceCollection.AddSingleton<IPlexWatchlistApi, PlexTvClient>();
         serviceCollection.AddSingleton<WatchlistService>();
-        serviceCollection.AddSingleton<PlexSync>();
+        serviceCollection.AddSingleton(sp =>
+        {
+            var logger = sp.GetRequiredService<ILoggerFactory>().CreateLogger<PlexSync>();
+            return new PlexSync(
+                sp.GetRequiredService<IWatchlistStore>(),
+                sp.GetRequiredService<IPlexWatchlistApi>(),
+                sp.GetRequiredService<IClock>(),
+                // A count only: titles from a user's Plex list stay out of the logs.
+                (user, count) => logger.LogInformation(
+                    "Watchlist sync for user {UserId}: {Count} Plex title(s) have no TMDB/TVDB/IMDb id yet; retrying next run",
+                    user.ToString("N"),
+                    count));
+        });
         serviceCollection.AddSingleton<PosterFinder>();
         serviceCollection.AddHostedService<WatchlistPlayedListener>();
     }

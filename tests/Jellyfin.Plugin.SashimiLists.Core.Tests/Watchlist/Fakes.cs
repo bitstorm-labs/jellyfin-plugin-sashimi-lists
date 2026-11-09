@@ -18,7 +18,23 @@ internal sealed class FakeLibrary : ILibraryLookup
 {
     public Dictionary<(Guid User, string Tmdb), string> Visible { get; } = [];
 
+    public int SingleCalls { get; private set; }
+
+    public int BatchCalls { get; private set; }
+
     public string? FindVisibleItemId(Guid userId, WatchlistType type, ExternalIds ids)
+    {
+        SingleCalls++;
+        return Lookup(userId, ids);
+    }
+
+    public IReadOnlyList<string?> FindVisibleItemIds(Guid userId, IReadOnlyList<(WatchlistType Type, ExternalIds Ids)> titles)
+    {
+        BatchCalls++;
+        return titles.Select(t => Lookup(userId, t.Ids)).ToList();
+    }
+
+    private string? Lookup(Guid userId, ExternalIds ids)
         => ids.Tmdb is not null && Visible.TryGetValue((userId, ids.Tmdb), out var itemId) ? itemId : null;
 }
 
@@ -90,9 +106,17 @@ internal sealed class FakePlexApi : IPlexWatchlistApi
         }
     }
 
+    /// <summary>When set, GetAccount throws it.</summary>
+    public Exception? AccountFailure { get; set; }
+
     public Task<PlexAccount> GetAccount(string token, CancellationToken ct)
     {
         Check(token);
+        if (AccountFailure is not null)
+        {
+            throw AccountFailure;
+        }
+
         return Task.FromResult(Account);
     }
 

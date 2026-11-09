@@ -25,6 +25,57 @@ public sealed class JellyfinLibraryLookup : ILibraryLookup
     public string? FindVisibleItemId(Guid userId, WatchlistType type, ExternalIds ids)
         => FindVisibleItem(userId, type, ids)?.Id.ToString("N");
 
+    public IReadOnlyList<string?> FindVisibleItemIds(Guid userId, IReadOnlyList<(WatchlistType Type, ExternalIds Ids)> titles)
+    {
+        ArgumentNullException.ThrowIfNull(titles);
+        var result = new string?[titles.Count];
+        var user = _userManager.GetUserById(userId);
+        if (user is null)
+        {
+            return result;
+        }
+
+        // One query per type for every id on the list, then match locally.
+        foreach (var type in new[] { WatchlistType.Movie, WatchlistType.Series })
+        {
+            var wanted = Enumerable.Range(0, titles.Count).Where(i => titles[i].Type == type && titles[i].Ids.Any).ToList();
+            if (wanted.Count == 0)
+            {
+                continue;
+            }
+
+            var providerIds = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase);
+            void Collect(MetadataProvider provider, Func<ExternalIds, string?> pick)
+            {
+                var values = wanted.Select(i => pick(titles[i].Ids)).Where(v => !string.IsNullOrWhiteSpace(v)).Select(v => v!.Trim()).Distinct(StringComparer.Ordinal).ToArray();
+                if (values.Length > 0)
+                {
+                    providerIds[provider.ToString()] = values;
+                }
+            }
+
+            Collect(MetadataProvider.Tmdb, ids => ids.Tmdb);
+            Collect(MetadataProvider.Tvdb, ids => ids.Tvdb);
+            Collect(MetadataProvider.Imdb, ids => ids.Imdb);
+
+            var items = _libraryManager.GetItemList(new InternalItemsQuery(user)
+            {
+                IncludeItemTypes = [type == WatchlistType.Movie ? BaseItemKind.Movie : BaseItemKind.Series],
+                HasAnyProviderIds = providerIds,
+                IsVirtualItem = false,
+                Recursive = true,
+            }).Select(item => (item.Id, Ids: IdsOf(item))).ToList();
+
+            foreach (var i in wanted)
+            {
+                var match = items.FirstOrDefault(item => item.Ids.Agrees(titles[i].Ids));
+                result[i] = match.Ids is null ? null : match.Id.ToString("N");
+            }
+        }
+
+        return result;
+    }
+
     /// <summary>The library item itself, for callers in the plugin shell.</summary>
     public BaseItem? FindVisibleItem(Guid userId, WatchlistType type, ExternalIds ids)
     {
@@ -60,4 +111,9 @@ public sealed class JellyfinLibraryLookup : ILibraryLookup
             Limit = 1,
         }).FirstOrDefault();
     }
+
+    private static ExternalIds IdsOf(BaseItem item) => new(
+        item.GetProviderId(MetadataProvider.Tmdb),
+        item.GetProviderId(MetadataProvider.Tvdb),
+        item.GetProviderId(MetadataProvider.Imdb));
 }
