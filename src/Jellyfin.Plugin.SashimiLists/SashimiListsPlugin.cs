@@ -5,7 +5,7 @@ using MediaBrowser.Model.Serialization;
 
 namespace Jellyfin.Plugin.SashimiLists;
 
-/// <summary>Read-only playlist-owner lookups for Sashimi clients. No settings.</summary>
+/// <summary>Playlist-owner lookups and the per-user Watchlist for Sashimi clients. No settings.</summary>
 public class SashimiListsPlugin : BasePlugin<BasePluginConfiguration>
 {
     public SashimiListsPlugin(IApplicationPaths applicationPaths, IXmlSerializer xmlSerializer)
@@ -19,5 +19,7 @@ public class SashimiListsPlugin : BasePlugin<BasePluginConfiguration>
 
     public override string Description =>
         "Tells signed-in users who owns a playlist they can see, so shared lists "
-        + "keep their creator even after Jellyfin drops a playlist's shares.";
+        + "keep their creator even after Jellyfin drops a playlist's shares, and keeps "
+        + "each user's Watchlist, which can hold titles not on the server and can sync "
+        + "with their own Plex watchlist.";
 }
