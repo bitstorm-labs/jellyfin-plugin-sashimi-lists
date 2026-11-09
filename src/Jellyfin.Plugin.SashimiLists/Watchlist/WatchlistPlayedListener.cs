@@ -53,20 +53,28 @@ public sealed class WatchlistPlayedListener : IHostedService
 
     private void OnUserDataSaved(object? sender, UserDataSaveEventArgs e)
     {
-        // Start/progress saves of a rewatch carry Played=true from the earlier
-        // watch; only finishing, or marking played, counts.
-        if (e.UserData is not { Played: true }
-            || e.SaveReason is not (UserDataSaveReason.PlaybackFinished or UserDataSaveReason.TogglePlayed or UserDataSaveReason.UpdateUserData)
-            || e.Item is not (Movie or Episode))
+        if (e.Item is not (Movie or Episode) || e.UserData is null)
+        {
+            return;
+        }
+
+        var save = e.SaveReason switch
+        {
+            UserDataSaveReason.PlaybackFinished => PlayedSave.PlaybackFinished,
+            UserDataSaveReason.TogglePlayed => PlayedSave.MarkedPlayed,
+            UserDataSaveReason.UpdateUserData => PlayedSave.UserDataUpdate,
+            _ => PlayedSave.Other,
+        };
+        DateTimeOffset? lastPlayed = e.UserData.LastPlayedDate is { } last
+            ? new DateTimeOffset(DateTime.SpecifyKind(last, DateTimeKind.Utc))
+            : null;
+        if (DropOff.FinishedAt(save, e.UserData.Played, lastPlayed, _clock.Now) is not { } playedAt)
         {
             return;
         }
 
         var userId = e.UserId;
         var item = e.Item;
-        var playedAt = e.UserData.LastPlayedDate is { } last
-            ? new DateTimeOffset(DateTime.SpecifyKind(last, DateTimeKind.Utc))
-            : _clock.Now;
 
         // Off the event thread: the episode check queries the library.
         _ = Task.Run(() =>

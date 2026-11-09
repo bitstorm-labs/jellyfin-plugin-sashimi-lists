@@ -73,6 +73,32 @@ public sealed class DropOffTests : IDisposable
         Assert.Empty(_temp.Store.AllUsers());
     }
 
+    [Theory]
+    [InlineData(PlayedSave.PlaybackFinished)]
+    [InlineData(PlayedSave.MarkedPlayed)]
+    public void Finishing_or_marking_played_without_a_date_counts_as_now(PlayedSave save)
+    {
+        Assert.Equal(_clock.Now, DropOff.FinishedAt(save, played: true, lastPlayed: null, _clock.Now));
+    }
+
+    [Fact]
+    public void A_user_data_update_counts_only_with_a_play_date()
+    {
+        // Review finding: a client posting user data with Played=true and no date
+        // dropped a title re-added for a rewatch.
+        var when = _clock.Now.AddDays(-2);
+        Assert.Null(DropOff.FinishedAt(PlayedSave.UserDataUpdate, played: true, lastPlayed: null, _clock.Now));
+        Assert.Equal(when, DropOff.FinishedAt(PlayedSave.UserDataUpdate, played: true, lastPlayed: when, _clock.Now));
+    }
+
+    [Theory]
+    [InlineData(PlayedSave.Other, true)]
+    [InlineData(PlayedSave.PlaybackFinished, false)]
+    public void Other_saves_and_unplayed_items_never_count(PlayedSave save, bool played)
+    {
+        Assert.Null(DropOff.FinishedAt(save, played, _clock.Now, _clock.Now));
+    }
+
     [Fact]
     public void ShouldRemove_only_for_plays_after_the_add()
     {
