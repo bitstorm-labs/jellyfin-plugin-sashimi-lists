@@ -60,6 +60,7 @@ any id in common.
 {
   "plex": { "username": "alice", "needsReconnect": false },
   "cardDismissed": false,
+  "plexOptedOut": false,
   "entries": [
     {
       "id": "<32-hex>", "type": "Movie", "title": "Dune", "year": 2021,
@@ -72,6 +73,10 @@ any id in common.
 ```
 
 - `plex` is `null` when the user hasn't linked Plex.
+- `plexOptedOut` is `true` once the user has disconnected Plex. Clients must not
+  link Plex automatically (for example on a Requests sign-in with Plex) while it
+  is `true`; an explicit Connect Plex still works and clears it. Missing (servers
+  before 0.2.2) means `false`.
 - `entries` are newest `addedAt` first. `type` is `"Movie"` or `"Series"`.
 - `itemId` is the library item (N format) **the caller** can see, or `null`
   when it isn't on the server or their library access or parental limits hide it.
@@ -100,7 +105,8 @@ Body `{ "token": "<the user's plex.tv token>", "replace": false }`.
 
 - `200 { "username", "needsReconnect" }` when linked. Linking the same Plex
   account again (same `uuid`) refreshes the token and clears `needsReconnect`.
-  A successful link starts a sync straight away.
+  A successful link starts a sync straight away and clears `plexOptedOut`.
+  A failed link (`409`, `422`, `503`) leaves it unchanged.
 - `422` when plex.tv rejects the token (not `401`: clients treat any `401` as
   an expired Jellyfin session).
 - `503` (no body) when plex.tv is unreachable, times out or returns an error,
@@ -112,7 +118,7 @@ Body `{ "token": "<the user's plex.tv token>", "replace": false }`.
 
 ### `DELETE /SashimiLists/Watchlist/Plex`
 
-`204`. Syncing stops; the entries stay.
+`204`. Syncing stops; the entries stay. Sets `plexOptedOut` to `true`.
 
 ### `POST /SashimiLists/Watchlist/DismissCard`
 

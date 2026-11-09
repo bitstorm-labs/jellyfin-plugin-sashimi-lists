@@ -18,7 +18,7 @@ public sealed record EntryView(
 public sealed record PlexLinkView(string Username, bool NeedsReconnect);
 
 /// <summary>The caller's whole watchlist.</summary>
-public sealed record WatchlistViewModel(PlexLinkView? Plex, bool CardDismissed, IReadOnlyList<EntryView> Entries);
+public sealed record WatchlistViewModel(PlexLinkView? Plex, bool CardDismissed, bool PlexOptedOut, IReadOnlyList<EntryView> Entries);
 
 /// <summary>The outcome of linking a Plex account.</summary>
 public abstract record LinkResult;
@@ -66,7 +66,7 @@ public class WatchlistService
         var itemIds = ordered.Count == 0 ? [] : _library.FindVisibleItemIds(user, ordered.Select(e => (e.Type, e.Ids)).ToList());
         var entries = ordered.Select((e, i) => ToView(e, itemIds[i])).ToList();
         var plex = watchlist.Plex is null ? null : new PlexLinkView(watchlist.Plex.Username, watchlist.Plex.NeedsReconnect);
-        return new WatchlistViewModel(plex, watchlist.CardDismissed, entries);
+        return new WatchlistViewModel(plex, watchlist.CardDismissed, watchlist.PlexOptedOut, entries);
     }
 
     /// <summary>
@@ -198,16 +198,19 @@ public class WatchlistService
                 w.LastPlexSnapshot.Clear();
             }
 
+            // An explicit connect is a fresh choice, whatever was decided before.
+            w.PlexOptedOut = false;
             return new Linked(new PlexLinkView(w.Plex.Username, w.Plex.NeedsReconnect));
         });
     }
 
-    /// <summary>Stops syncing. The entries stay as they are.</summary>
+    /// <summary>Stops syncing and records that the user opted out. The entries stay as they are.</summary>
     public void UnlinkPlex(Guid user)
     {
         _store.Update(user, w =>
         {
             w.Plex = null;
+            w.PlexOptedOut = true;
             w.Outbox.Clear();
             w.LastPlexSnapshot.Clear();
             return 0;

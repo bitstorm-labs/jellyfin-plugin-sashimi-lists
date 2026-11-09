@@ -20,11 +20,13 @@ public class WatchlistContractTests
         var view = new WatchlistViewModel(
             new PlexLinkView("alice", true),
             CardDismissed: true,
+            PlexOptedOut: true,
             [new EntryView(EntryId, WatchlistType.Series, "Show", 2020, "https://image.example/p.jpg", new ExternalIds("1", "2", "tt3"), new DateTimeOffset(2026, 11, 9, 12, 0, 0, TimeSpan.Zero), "abcdef")]);
 
         var json = Body(Json(WatchlistContract.ToDto(view)));
 
-        Assert.Equal(["plex", "cardDismissed", "entries"], Names(json));
+        Assert.Equal(["plex", "cardDismissed", "entries", "plexOptedOut"], Names(json));
+        Assert.True(json.GetProperty("plexOptedOut").GetBoolean());
         Assert.Equal(["username", "needsReconnect"], Names(json.GetProperty("plex")));
         Assert.True(json.GetProperty("plex").GetProperty("needsReconnect").GetBoolean());
         var entry = json.GetProperty("entries")[0];
@@ -41,7 +43,7 @@ public class WatchlistContractTests
     {
         // Swift's .iso8601 date decoding rejects fractional seconds and needs a zone.
         var addedAt = new DateTimeOffset(2026, 11, 9, 10, 3, 12, 345, TimeSpan.FromHours(-7)).AddTicks(6789);
-        var view = new WatchlistViewModel(null, false, [new EntryView(EntryId, WatchlistType.Movie, "M", null, null, new ExternalIds("1", null, null), addedAt, null)]);
+        var view = new WatchlistViewModel(null, false, false, [new EntryView(EntryId, WatchlistType.Movie, "M", null, null, new ExternalIds("1", null, null), addedAt, null)]);
 
         var json = Body(Json(WatchlistContract.ToDto(view)));
 
@@ -51,7 +53,7 @@ public class WatchlistContractTests
     [Fact]
     public void Unlinked_view_has_null_plex_and_null_optional_fields()
     {
-        var view = new WatchlistViewModel(null, false, [new EntryView(EntryId, WatchlistType.Movie, "M", null, null, new ExternalIds("1", null, null), DateTimeOffset.UnixEpoch, null)]);
+        var view = new WatchlistViewModel(null, false, false, [new EntryView(EntryId, WatchlistType.Movie, "M", null, null, new ExternalIds("1", null, null), DateTimeOffset.UnixEpoch, null)]);
 
         var json = Body(Json(WatchlistContract.ToDto(view)));
 

@@ -199,6 +199,18 @@ public sealed class WatchlistStoreTests : IDisposable
     }
 
     [Fact]
+    public void A_file_from_before_the_opt_out_flag_reads_as_not_opted_out()
+    {
+        Directory.CreateDirectory(_dir);
+        File.WriteAllText(Path.Combine(_dir, Alice.ToString("N") + ".json"), """{"Entries":[],"Plex":null,"CardDismissed":true,"LastPlexSnapshot":[],"Outbox":[]}""");
+
+        var read = new FileWatchlistStore(_dir).Read(Alice);
+
+        Assert.True(read.CardDismissed);
+        Assert.False(read.PlexOptedOut);
+    }
+
+    [Fact]
     public void ExternalIds_Agrees_on_any_shared_id_and_not_on_disjoint()
     {
         var a = new ExternalIds("100", null, "tt0001");
