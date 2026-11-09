@@ -344,4 +344,48 @@ public sealed class PlexSyncTests : IDisposable
         Assert.Equal("kS", entry.PlexRatingKey);
         Assert.Empty(_plex.Added);
     }
+
+    [Fact]
+    public async Task Unlink_and_relink_during_a_sync_still_gets_a_first_sync_merge()
+    {
+        await LinkedAndSynced();
+        _plex.Title("kU", WatchlistType.Movie, "Unlinked add", new ExternalIds("31", null, null));
+        _plex.Gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var stale = _sync.SyncUser(Alice, CancellationToken.None);
+        await _plex.Entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        _service.UnlinkPlex(Alice);
+        _service.Add(Alice, Movie("Unlinked add", tmdb: "31")); // no outbox: not linked
+        Assert.IsType<Linked>(await _service.LinkPlex(Alice, FakePlexApi.Token, replace: false, CancellationToken.None));
+        _plex.Gate.SetResult();
+        await stale.WaitAsync(TimeSpan.FromSeconds(5));
+        _plex.Gate = null;
+
+        Assert.False(Stored.Plex!.FirstSyncDone); // the stale run must not mark the new link synced
+
+        await _sync.SyncUser(Alice, CancellationToken.None);
+        Assert.Contains("kU", _plex.Added);
+    }
+
+    [Fact]
+    public async Task Plex_item_without_ids_is_retried_and_counted()
+    {
+        var unmatched = new List<int>();
+        var sync = new PlexSync(_temp.Store, _plex, _clock, (_, count) => unmatched.Add(count));
+        _plex.Title("kN", WatchlistType.Movie, "New on Plex", new ExternalIds(null, null, null), onWatchlist: true);
+        Link(firstSyncDone: false);
+
+        await sync.SyncUser(Alice, CancellationToken.None);
+        Assert.Empty(Stored.Entries);
+        Assert.DoesNotContain("kN", Stored.LastPlexSnapshot);
+        Assert.Equal([1], unmatched);
+
+        // Plex fills in the ids later; the next run picks the title up.
+        _plex.Catalog["kN"] = (_plex.Catalog["kN"].Item, new ExternalIds("41", null, null));
+        await sync.SyncUser(Alice, CancellationToken.None);
+
+        Assert.Equal("kN", Assert.Single(Stored.Entries).PlexRatingKey);
+        Assert.Contains("kN", Stored.LastPlexSnapshot);
+        Assert.Equal([1], unmatched); // nothing unmatched this time, so no report
+    }
 }

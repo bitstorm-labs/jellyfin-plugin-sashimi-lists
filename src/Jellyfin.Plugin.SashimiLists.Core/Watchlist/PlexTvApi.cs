@@ -52,7 +52,12 @@ public class PlexTvApi : IPlexWatchlistApi
         // 404: Plex no longer knows this ratingKey, so it has no ids.
         var body = await Send(HttpMethod.Get, Metadata + "/library/metadata/" + Uri.EscapeDataString(ratingKey), token, ct, notFoundIsNull: true).ConfigureAwait(false);
         var ids = body is null ? new ExternalIds(null, null, null) : PlexJson.ParseIds(body);
-        _idCache[ratingKey] = ids;
+        if (ids.Any)
+        {
+            // Ids never change once Plex has them; "none yet" may, so it isn't cached.
+            _idCache[ratingKey] = ids;
+        }
+
         return ids;
     }
 

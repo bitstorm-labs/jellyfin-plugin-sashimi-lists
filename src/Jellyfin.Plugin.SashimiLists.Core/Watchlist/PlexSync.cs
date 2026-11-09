@@ -18,11 +18,18 @@ public class PlexSync
     // would otherwise both push the same outbox.
     private readonly ConcurrentDictionary<Guid, SemaphoreSlim> _running = new();
 
-    public PlexSync(IWatchlistStore store, IPlexWatchlistApi plex, IClock clock)
+    private readonly Action<Guid, int>? _onUnmatched;
+
+    /// <param name="store">Watchlist storage.</param>
+    /// <param name="plex">plex.tv.</param>
+    /// <param name="clock">The time.</param>
+    /// <param name="onUnmatched">Told how many Plex titles a run couldn't import yet (no external ids); they are retried next run.</param>
+    public PlexSync(IWatchlistStore store, IPlexWatchlistApi plex, IClock clock, Action<Guid, int>? onUnmatched = null)
     {
         _store = store;
         _plex = plex;
         _clock = clock;
+        _onUnmatched = onUnmatched;
     }
 
     /// <summary>
@@ -57,19 +64,19 @@ public class PlexSync
         try
         {
             var plan = await Plan(state, link, ct).ConfigureAwait(false);
-            _store.Update(user, w =>
+            var applied = _store.Update(user, w => Merge(w, link, plan));
+            if (applied && plan.Unmatched.Count > 0)
             {
-                Merge(w, link.AccountUuid, plan);
-                return 0;
-            });
+                _onUnmatched?.Invoke(user, plan.Unmatched.Count);
+            }
         }
         catch (PlexUnauthorizedException)
         {
             _store.Update(user, w =>
             {
-                if (w.Plex is not null && w.Plex.AccountUuid == link.AccountUuid)
+                if (SameLink(w.Plex, link))
                 {
-                    w.Plex.NeedsReconnect = true;
+                    w.Plex!.NeedsReconnect = true;
                 }
 
                 return 0;
@@ -161,7 +168,13 @@ public class PlexSync
             {
                 plan.Keys[match.Id] = key;
             }
-            else if (ids.Any)
+            else if (!ids.Any)
+            {
+                // Plex hasn't matched it to TMDB/TVDB/IMDb yet. Leave it out of the
+                // snapshot so the next run looks at it again.
+                plan.Unmatched.Add(key);
+            }
+            else
             {
                 plan.Imports.Add(new WatchlistEntry
                 {
@@ -202,12 +215,16 @@ public class PlexSync
         return plan;
     }
 
-    private static void Merge(UserWatchlist w, string accountUuid, SyncPlan plan)
+    /// <summary>The stored link is still the one a sync started under (not unlinked, relinked or switched since).</summary>
+    private static bool SameLink(PlexLinkState? current, PlexLinkState started)
+        => current is not null && current.LinkId == started.LinkId && current.AccountUuid == started.AccountUuid;
+
+    private static bool Merge(UserWatchlist w, PlexLinkState link, SyncPlan plan)
     {
-        // Unlinked or linked to another account while this sync ran: its results don't apply.
-        if (w.Plex is null || w.Plex.AccountUuid != accountUuid || w.Plex.NeedsReconnect)
+        // Unlinked, relinked or switched account while this sync ran: its results don't apply.
+        if (!SameLink(w.Plex, link) || w.Plex!.NeedsReconnect)
         {
-            return;
+            return false;
         }
 
         foreach (var (entryId, key) in plan.Keys)
@@ -246,7 +263,8 @@ public class PlexSync
         }
 
         w.Plex.FirstSyncDone = true;
-        w.LastPlexSnapshot = new HashSet<string>(plan.OnPlex, StringComparer.Ordinal);
+        w.LastPlexSnapshot = new HashSet<string>(plan.OnPlex.Where(k => !plan.Unmatched.Contains(k)), StringComparer.Ordinal);
+        return true;
     }
 
     private sealed class SyncPlan(HashSet<string> onPlex)
@@ -258,6 +276,8 @@ public class PlexSync
         public List<WatchlistEntry> Imports { get; } = [];
 
         public HashSet<string> RemovedOnPlex { get; } = new(StringComparer.Ordinal);
+
+        public HashSet<string> Unmatched { get; } = new(StringComparer.Ordinal);
 
         public List<PlexOp> ProcessedOps { get; } = [];
     }

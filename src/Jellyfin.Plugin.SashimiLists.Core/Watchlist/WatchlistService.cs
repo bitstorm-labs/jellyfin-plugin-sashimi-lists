@@ -159,7 +159,7 @@ public class WatchlistService
             }
             else
             {
-                w.Plex = new PlexLinkState { Token = token, AccountUuid = account.Uuid, Username = account.Username };
+                w.Plex = new PlexLinkState { LinkId = Guid.NewGuid(), Token = token, AccountUuid = account.Uuid, Username = account.Username };
                 // Pending pushes and the snapshot belong to the previous account.
                 w.Outbox.Clear();
                 w.LastPlexSnapshot.Clear();

@@ -112,6 +112,18 @@ public class PlexTvApiTests
     }
 
     [Fact]
+    public async Task GetIds_with_no_ids_yet_is_asked_again_next_time()
+    {
+        var (api, handler) = Make();
+        handler.Routes.Add(("library/metadata/k3", HttpStatusCode.OK, """{"MediaContainer":{"Metadata":[{"Guid":[]}]}}"""));
+
+        await api.GetIds(Token, "k3", CancellationToken.None);
+        await api.GetIds(Token, "k3", CancellationToken.None);
+
+        Assert.Equal(2, handler.Requests.Count);
+    }
+
+    [Fact]
     public async Task GetWatchlist_reads_every_page()
     {
         var (api, handler) = Make();

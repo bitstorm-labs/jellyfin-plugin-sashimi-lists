@@ -68,6 +68,12 @@ public sealed class WatchlistEntry
 /// <summary>A user's link to their own plex.tv account. The token never leaves the plugin.</summary>
 public sealed class PlexLinkState
 {
+    /// <summary>
+    /// New each time a link is created (not when the same account's token is
+    /// refreshed), so a sync that started under an earlier link can't apply to this one.
+    /// </summary>
+    public Guid LinkId { get; set; }
+
     public string Token { get; set; } = string.Empty;
 
     public string AccountUuid { get; set; } = string.Empty;
