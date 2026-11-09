@@ -20,18 +20,32 @@ public sealed record PlexLinkView(string Username, bool NeedsReconnect);
 /// <summary>The caller's whole watchlist.</summary>
 public sealed record WatchlistViewModel(PlexLinkView? Plex, bool CardDismissed, IReadOnlyList<EntryView> Entries);
 
+/// <summary>The outcome of linking a Plex account.</summary>
+public abstract record LinkResult;
+
+/// <summary>Linked (or the same account's token refreshed).</summary>
+public sealed record Linked(PlexLinkView Link) : LinkResult;
+
+/// <summary>plex.tv rejected the token.</summary>
+public sealed record Rejected : LinkResult;
+
+/// <summary>Already linked to a different Plex account, named here, and the caller didn't ask to replace it.</summary>
+public sealed record ConflictsWith(string Username) : LinkResult;
+
 /// <summary>Adds, removes and shows one user's watchlist. Every call acts on the given user's list only.</summary>
 public class WatchlistService
 {
     private readonly IWatchlistStore _store;
     private readonly ILibraryLookup _library;
     private readonly IClock _clock;
+    private readonly IPlexWatchlistApi _plex;
 
-    public WatchlistService(IWatchlistStore store, ILibraryLookup library, IClock clock)
+    public WatchlistService(IWatchlistStore store, ILibraryLookup library, IClock clock, IPlexWatchlistApi plex)
     {
         _store = store;
         _library = library;
         _clock = clock;
+        _plex = plex;
     }
 
     /// <summary>True when two titles are the same: same type and any agreeing id.</summary>
@@ -107,6 +121,86 @@ public class WatchlistService
         _store.Update(user, w =>
         {
             w.CardDismissed = true;
+            return 0;
+        });
+    }
+
+    /// <summary>
+    /// Links the user's own Plex account. A new account starts with a union-only
+    /// first sync; re-linking the same account (by uuid) only refreshes the token
+    /// and clears <c>NeedsReconnect</c>.
+    /// </summary>
+    public async Task<LinkResult> LinkPlex(Guid user, string token, bool replace, CancellationToken ct)
+    {
+        PlexAccount account;
+        try
+        {
+            account = await _plex.GetAccount(token, ct).ConfigureAwait(false);
+        }
+        catch (PlexUnauthorizedException)
+        {
+            return new Rejected();
+        }
+
+        return _store.Update<LinkResult>(user, w =>
+        {
+            if (w.Plex is not null && w.Plex.AccountUuid == account.Uuid)
+            {
+                w.Plex.Token = token;
+                w.Plex.Username = account.Username;
+                w.Plex.NeedsReconnect = false;
+            }
+            else if (w.Plex is not null && !replace)
+            {
+                return new ConflictsWith(w.Plex.Username);
+            }
+            else
+            {
+                w.Plex = new PlexLinkState { Token = token, AccountUuid = account.Uuid, Username = account.Username };
+                // Pending pushes and the snapshot belong to the previous account.
+                w.Outbox.Clear();
+                w.LastPlexSnapshot.Clear();
+            }
+
+            return new Linked(new PlexLinkView(w.Plex.Username, w.Plex.NeedsReconnect));
+        });
+    }
+
+    /// <summary>Stops syncing. The entries stay as they are.</summary>
+    public void UnlinkPlex(Guid user)
+    {
+        _store.Update(user, w =>
+        {
+            w.Plex = null;
+            w.Outbox.Clear();
+            w.LastPlexSnapshot.Clear();
+            return 0;
+        });
+    }
+
+    /// <summary>
+    /// The user finished a title (a movie played, or a show's last episode):
+    /// entries for it that were added before that play drop off, and come off
+    /// Plex too when linked.
+    /// </summary>
+    public void MarkFinished(Guid user, WatchlistType type, ExternalIds ids, DateTimeOffset playedAt)
+    {
+        bool Finished(WatchlistEntry e) => SameTitle(e.Type, e.Ids, type, ids) && DropOff.ShouldRemove(e, playedAt);
+
+        // Every play by every user lands here; most touch no watchlist entry, so don't write.
+        if (!_store.Read(user).Entries.Any(Finished))
+        {
+            return;
+        }
+
+        _store.Update(user, w =>
+        {
+            var finished = w.Entries.Where(Finished).Select(e => e.Id).ToList();
+            foreach (var id in finished)
+            {
+                RemoveIn(w, id);
+            }
+
             return 0;
         });
     }

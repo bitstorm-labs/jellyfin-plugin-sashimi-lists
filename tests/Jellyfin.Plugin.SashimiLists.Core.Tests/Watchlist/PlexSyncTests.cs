@@ -14,7 +14,7 @@ public sealed class PlexSyncTests : IDisposable
 
     public PlexSyncTests()
     {
-        _service = new WatchlistService(_temp.Store, new FakeLibrary(), _clock);
+        _service = new WatchlistService(_temp.Store, new FakeLibrary(), _clock, _plex);
         _sync = new PlexSync(_temp.Store, _plex, _clock);
     }
 

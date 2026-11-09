@@ -14,7 +14,7 @@ public sealed class WatchlistServiceTests : IDisposable
 
     public WatchlistServiceTests()
     {
-        _service = new WatchlistService(_temp.Store, _library, _clock);
+        _service = new WatchlistService(_temp.Store, _library, _clock, new FakePlexApi());
     }
 
     public void Dispose() => _temp.Dispose();
