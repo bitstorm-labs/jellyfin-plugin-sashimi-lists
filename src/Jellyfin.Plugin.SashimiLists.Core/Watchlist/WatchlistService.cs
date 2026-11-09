@@ -29,8 +29,11 @@ public sealed record Linked(PlexLinkView Link) : LinkResult;
 /// <summary>plex.tv rejected the token.</summary>
 public sealed record Rejected : LinkResult;
 
-/// <summary>Already linked to a different Plex account, named here, and the caller didn't ask to replace it.</summary>
-public sealed record ConflictsWith(string Username) : LinkResult;
+/// <summary>
+/// Already linked to a different Plex account and the caller didn't ask to replace it.
+/// <paramref name="Username"/> is the linked account, <paramref name="NewUsername"/> the token's.
+/// </summary>
+public sealed record ConflictsWith(string Username, string NewUsername) : LinkResult;
 
 /// <summary>Adds, removes and shows one user's watchlist. Every call acts on the given user's list only.</summary>
 public class WatchlistService
@@ -152,7 +155,7 @@ public class WatchlistService
             }
             else if (w.Plex is not null && !replace)
             {
-                return new ConflictsWith(w.Plex.Username);
+                return new ConflictsWith(w.Plex.Username, account.Username);
             }
             else
             {

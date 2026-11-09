@@ -49,13 +49,15 @@ public sealed class PlexLinkTests : IDisposable
     }
 
     [Fact]
-    public async Task Link_to_different_account_without_replace_is_ConflictsWith_current_username()
+    public async Task Link_to_different_account_without_replace_is_ConflictsWith_current_and_new_username()
     {
         Existing("uuid-other", "someone-else");
 
         var result = await _service.LinkPlex(Alice, FakePlexApi.Token, replace: false, CancellationToken.None);
 
-        Assert.Equal("someone-else", Assert.IsType<ConflictsWith>(result).Username);
+        var conflict = Assert.IsType<ConflictsWith>(result);
+        Assert.Equal("someone-else", conflict.Username);
+        Assert.Equal("alice", conflict.NewUsername);
         Assert.Equal("old-token", Stored.Plex!.Token);
         Assert.Equal("uuid-other", Stored.Plex.AccountUuid);
     }
