@@ -93,7 +93,7 @@ public class WatchlistService
                 Type = entry.Type,
                 Title = entry.Title,
                 Year = entry.Year,
-                PosterUrl = entry.PosterUrl,
+                PosterUrl = PosterUrls.Clean(entry.PosterUrl),
                 Ids = entry.Ids,
                 AddedAt = _clock.Now,
             };

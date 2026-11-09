@@ -87,6 +87,18 @@ public sealed class PlexSyncTests : IDisposable
     }
 
     [Fact]
+    public async Task Imported_item_with_relative_thumb_has_no_poster()
+    {
+        await LinkedAndSynced();
+        _plex.Title("kR", WatchlistType.Movie, "Relative", new ExternalIds("77", null, null), onWatchlist: true);
+        _plex.Catalog["kR"] = (_plex.Catalog["kR"].Item with { Thumb = "/library/metadata/kR/thumb/1" }, _plex.Catalog["kR"].Ids);
+
+        await _sync.SyncUser(Alice, CancellationToken.None);
+
+        Assert.Null(Assert.Single(Stored.Entries).PosterUrl);
+    }
+
+    [Fact]
     public async Task Item_removed_on_Plex_after_first_sync_is_removed_locally()
     {
         _plex.Title("kX", WatchlistType.Movie, "X", new ExternalIds("9", null, null), onWatchlist: true);

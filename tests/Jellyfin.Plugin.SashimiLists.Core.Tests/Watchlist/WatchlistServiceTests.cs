@@ -138,6 +138,27 @@ public sealed class WatchlistServiceTests : IDisposable
         Assert.Equal<PlexOp>([new PushAdd(kept.Id)], stored.Outbox);
     }
 
+    [Theory]
+    [InlineData("/Items/abc/Images/Primary")]
+    [InlineData("image.tmdb.org/t/p/w500/x.jpg")]
+    [InlineData("ftp://image.example/x.jpg")]
+    [InlineData("")]
+    public void Add_drops_a_posterUrl_that_is_not_absolute_http(string posterUrl)
+    {
+        var added = _service.Add(Alice, Movie("x", tmdb: "1") with { PosterUrl = posterUrl }).Entry;
+
+        Assert.Null(added.PosterUrl);
+        Assert.Null(_temp.Store.Read(Alice).Entries.Single().PosterUrl);
+    }
+
+    [Fact]
+    public void Add_keeps_an_absolute_https_posterUrl()
+    {
+        var added = _service.Add(Alice, Movie("x", tmdb: "1") with { PosterUrl = "https://image.tmdb.org/t/p/w500/x.jpg" }).Entry;
+
+        Assert.Equal("https://image.tmdb.org/t/p/w500/x.jpg", added.PosterUrl);
+    }
+
     [Fact]
     public void DismissCard_is_remembered()
     {

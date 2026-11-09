@@ -34,6 +34,16 @@ public sealed record ExternalIds(string? Tmdb, string? Tvdb, string? Imdb)
         => Has(a) && Has(b) && string.Equals(a!.Trim(), b!.Trim(), comparison);
 }
 
+/// <summary>Poster references clients can load from anywhere.</summary>
+public static class PosterUrls
+{
+    /// <summary>The url when it is absolute http(s); otherwise null (relative paths would resolve against the wrong host).</summary>
+    public static string? Clean(string? url)
+        => Uri.TryCreate(url, UriKind.Absolute, out var uri) && (uri.Scheme == Uri.UriSchemeHttps || uri.Scheme == Uri.UriSchemeHttp)
+            ? url
+            : null;
+}
+
 /// <summary>One title on a user's watchlist, stored by external id rather than as a library item.</summary>
 public sealed class WatchlistEntry
 {

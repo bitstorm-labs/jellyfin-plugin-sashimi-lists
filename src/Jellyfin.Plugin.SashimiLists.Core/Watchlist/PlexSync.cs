@@ -142,7 +142,7 @@ public class PlexSync
                     Type = item.Type,
                     Title = item.Title,
                     Year = item.Year,
-                    PosterUrl = item.Thumb,
+                    PosterUrl = PosterUrls.Clean(item.Thumb),
                     Ids = ids,
                     AddedAt = _clock.Now,
                     PlexRatingKey = key,
