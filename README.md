@@ -167,8 +167,9 @@ details page of a title that isn't on the server.
 - `source` names the provider ("TMDB" for TheMovieDb), for a "Details from TMDB" line.
 - `itemId` is present when the title is on the server and the caller can see it
   (open the normal item page then).
-- Image URLs are absolute provider URLs (image.tmdb.org) that clients load
-  directly; the plugin doesn't proxy them.
+- Image URLs are absolute provider URLs (image.tmdb.org, or another image
+  provider such as fanart.tv when the metadata provider has none) that clients
+  load directly; the plugin doesn't proxy them.
 - Runtime and season count come from Jellyfin's built-in TMDB client, which the
   plugin reaches by name; if a Jellyfin update renames it they are left out.
 

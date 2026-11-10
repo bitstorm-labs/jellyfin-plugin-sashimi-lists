@@ -1,6 +1,6 @@
 {
   "category": "General",
-  "changelog": "Watchlist v2: merges the old Watchlist playlist once, search for titles to add (on and off the server), details for titles not on the server, and a Requests address setting the apps follow.",
+  "changelog": "Requests made with an API key (no user) get a clean 401/404 instead of a server error; Watchlist details stop asking providers that cannot handle them (fewer log errors).",
   "description": "Tells signed-in users who owns a playlist they can see, so shared lists keep their creator even after Jellyfin drops a playlist's shares, and keeps each user's Watchlist, which can hold titles not on the server and can sync with their own Plex watchlist.",
   "guid": "d95b4484-62cb-4873-92c5-66a65b86b420",
   "name": "Sashimi Lists",
@@ -8,7 +8,7 @@
   "owner": "Bitstorm Labs",
   "targetAbi": "12.4.0.0",
   "timestamp": "2026-11-10T00:00:00.0000000Z",
-  "version": "0.3.0.0",
+  "version": "0.3.1.0",
   "status": "Active",
   "autoUpdate": false,
   "assemblies": []

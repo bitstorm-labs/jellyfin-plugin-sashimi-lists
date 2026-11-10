@@ -1,6 +1,7 @@
 using System.Net.Mime;
 using System.Security.Claims;
 using System.Text.Json;
+using Jellyfin.Plugin.SashimiLists.Core;
 using Jellyfin.Plugin.SashimiLists.Core.Watchlist;
 using MediaBrowser.Controller.Library;
 using Microsoft.AspNetCore.Authorization;
@@ -275,7 +276,7 @@ public class WatchlistController : ControllerBase
     private bool TryGetCaller(out Guid user)
     {
         user = Guid.Empty;
-        if (!Guid.TryParse(User.FindFirstValue(UserIdClaim), out var userId) || _userManager.GetUserById(userId) is null)
+        if (!CallerClaim.TryParse(User.FindFirstValue(UserIdClaim), out var userId) || _userManager.GetUserById(userId) is null)
         {
             return false;
         }
