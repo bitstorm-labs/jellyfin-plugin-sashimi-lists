@@ -1,14 +1,14 @@
 {
   "category": "General",
-  "changelog": "Watchlist: remembers when a user disconnects Plex (plexOptedOut) so apps stop re-linking it automatically.",
+  "changelog": "Watchlist v2: merges the old Watchlist playlist once, search for titles to add (on and off the server), details for titles not on the server, and a Requests address setting the apps follow.",
   "description": "Tells signed-in users who owns a playlist they can see, so shared lists keep their creator even after Jellyfin drops a playlist's shares, and keeps each user's Watchlist, which can hold titles not on the server and can sync with their own Plex watchlist.",
   "guid": "d95b4484-62cb-4873-92c5-66a65b86b420",
   "name": "Sashimi Lists",
   "overview": "Playlist owner lookups and per-user Watchlists for Sashimi clients.",
   "owner": "Bitstorm Labs",
   "targetAbi": "12.4.0.0",
-  "timestamp": "2026-11-09T00:00:00.0000000Z",
-  "version": "0.2.2.0",
+  "timestamp": "2026-11-10T00:00:00.0000000Z",
+  "version": "0.3.0.0",
   "status": "Active",
   "autoUpdate": false,
   "assemblies": []

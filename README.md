@@ -77,6 +77,8 @@ any id in common.
   link Plex automatically (for example on a Requests sign-in with Plex) while it
   is `true`; an explicit Connect Plex still works and clears it. Missing (servers
   before 0.2.2) means `false`.
+- The first `GET` for a user (plugin 0.3.0+) first merges their old
+  "Watchlist" playlist; see [Old Watchlist playlist](#old-watchlist-playlist).
 - `entries` are newest `addedAt` first. `type` is `"Movie"` or `"Series"`.
 - `itemId` is the library item (N format) **the caller** can see, or `null`
   when it isn't on the server or their library access or parental limits hide it.
@@ -94,6 +96,81 @@ Body `{ "type", "title", "year"?, "posterUrl"?, "tmdbId"?, "tvdbId"?, "imdbId"? 
 - A `posterUrl` that isn't absolute http(s) is dropped. When none is given and
   the title is on the server, the plugin fills it from Jellyfin's remote image
   providers so the tile keeps artwork if the file is later deleted.
+
+### `GET /SashimiLists/Watchlist/Search?q=<text>`
+
+Since 0.3.0. Search for titles to add, for any signed-in user (Jellyfin's own
+`/Items/RemoteSearch` is admin-only). `q` is required, 1-200 characters after
+trimming; otherwise `400`.
+
+`200`:
+
+```json
+{
+  "query": "dune",
+  "onServer": [ <hit> ],
+  "notOnServer": [ <hit> ]
+}
+```
+
+A hit:
+
+```json
+{
+  "type": "Movie", "title": "Dune", "year": 2021,
+  "tmdbId": "438631", "tvdbId": null, "imdbId": "tt1160419",
+  "posterUrl": "https://image.tmdb.org/...", "overview": "...",
+  "itemId": "<32-hex or null>", "onWatchlist": true, "watchlistEntryId": "<32-hex or null>"
+}
+```
+
+- `onServer`: library movies and series matching `q` that the caller can see,
+  best match first, then remote hits the library has under another name.
+  `itemId` is always set; use the Jellyfin image API for their artwork
+  (`posterUrl` is filled only when a remote hit supplied one).
+- `notOnServer`: movies and series from the server's remote metadata providers
+  (TMDB by default), movies and series interleaved. `itemId` is `null`. Hits
+  with no TMDB/TVDB/IMDb id are left out.
+- A remote hit that agrees with a library item on any provider id appears once,
+  under `onServer`.
+- At most 20 hits per group.
+- `onWatchlist` / `watchlistEntryId`: the caller's Watchlist entry for the
+  title (same type and any agreeing id), if there is one.
+- A hit's fields match the `POST /SashimiLists/Watchlist/Items` body, so it can
+  be posted back as it is.
+- If the metadata providers fail or time out (10 s), `notOnServer` is empty;
+  it is not an error.
+
+### `GET /SashimiLists/Watchlist/Details?type=movie|series&tmdbId=&tvdbId=&imdbId=`
+
+Since 0.3.0. What the server's metadata providers know about one title, for the
+details page of a title that isn't on the server.
+
+- `type` is `movie` or `series` (any case). At least one id; `tmdbId` and
+  `tvdbId` are numbers, `imdbId` looks like `tt1160419`. Otherwise `400`.
+- `404` when no provider knows the title.
+- `200`, with every field the providers don't know **left out** (not `null`):
+
+```json
+{
+  "type": "Movie", "title": "Dune", "year": 2021, "overview": "...",
+  "posterUrl": "https://image.tmdb.org/...", "backdropUrl": "https://image.tmdb.org/...",
+  "runtimeMinutes": 155, "officialRating": "PG-13", "genres": ["Science Fiction"],
+  "communityRating": 7.8, "source": "TMDB",
+  "tmdbId": "438631", "imdbId": "tt1160419",
+  "itemId": "<32-hex>", "onWatchlist": false, "watchlistEntryId": "<32-hex>"
+}
+```
+
+- `type`, `title` and `onWatchlist` are always present.
+- `runtimeMinutes` is for movies, `seasonCount` for series.
+- `source` names the provider ("TMDB" for TheMovieDb), for a "Details from TMDB" line.
+- `itemId` is present when the title is on the server and the caller can see it
+  (open the normal item page then).
+- Image URLs are absolute provider URLs (image.tmdb.org) that clients load
+  directly; the plugin doesn't proxy them.
+- Runtime and season count come from Jellyfin's built-in TMDB client, which the
+  plugin reaches by name; if a Jellyfin update renames it they are left out.
 
 ### `DELETE /SashimiLists/Watchlist/Items/{id}`
 
@@ -147,6 +224,26 @@ Body `{ "token": "<the user's plex.tv token>", "replace": false }`.
 - If a user's file can't be read, it is kept as `<userId>.json.corrupt-<time>`,
   an error is logged, and that user starts an empty, unlinked Watchlist.
 
+### Old Watchlist playlist
+
+Before the Watchlist existed, people kept a playlist called "Watchlist". The
+first `GET /SashimiLists/Watchlist` for a user (0.3.0+) moves it in, once:
+
+- Every playlist the user **owns** whose name is "watchlist" (any case,
+  surrounding spaces ignored). Shared and public playlists owned by others are
+  never touched.
+- Movies and series go in as they are; an episode or season brings in its
+  series. Anything without a TMDB, TVDB or IMDb id (home videos, YouTube,
+  music) is skipped; the log lists the skipped item ids.
+- Playlist order is kept (the first item shows first), and titles already on
+  the Watchlist, or repeated in the playlist, are added once.
+- The playlist is then **deleted**. For users linked to Plex the new titles go
+  to Plex with the next sync.
+- A per-user flag records that it ran, so it never runs again, even if the user
+  later makes a new playlist called Watchlist. If deleting the playlist fails,
+  the merge still counts as done and the error is logged. If anything fails
+  before the merge is saved, nothing changes and the next `GET` tries again.
+
 ### Plex endpoints used
 
 Each call sends the user's token in the `X-Plex-Token` header (never in a URL),
@@ -169,6 +266,21 @@ Linux the directory is `0700` and each file `0600`, owned by the Jellyfin
 process. No endpoint returns a token, and the plugin never logs one. Back up or
 restore these files like the rest of the data directory.
 
+## Server settings
+
+Dashboard › Plugins › Sashimi Lists has one setting, **Requests address**: the
+Seerr/Jellyseerr address the Sashimi apps should use, for example
+`https://requests.example.com`. It is empty by default. When it is set, the
+apps lock their Requests server to it ("Set by your server") and only ask
+users to sign in.
+
+### `GET /SashimiLists/Config`
+
+Since 0.3.0. Any signed-in user. `200 { "requestsUrl": "https://requests.example.com" }`,
+trimmed and without a trailing slash, or `{ "requestsUrl": null }` when the
+setting is empty or isn't an absolute http(s) URL. A `404` means the plugin is
+missing or older than 0.3.0: treat it as not set.
+
 ## Build
 
 ```sh
@@ -179,7 +291,8 @@ dotnet publish src/Jellyfin.Plugin.SashimiLists -c Release -o publish
 
 The rules live in `Jellyfin.Plugin.SashimiLists.Core` (net9.0, no Jellyfin
 reference) so they test in milliseconds: playlist visibility, the Watchlist
-store, sync, drop-off, the HTTP contract's JSON shape and plex.tv parsing. The
+store, sync, drop-off, the old-playlist merge, search grouping, details
+clean-up, the HTTP contract's JSON shape and plex.tv parsing. The
 plugin shell only adapts Jellyfin and plex.tv to them.
 
 ## Install by hand

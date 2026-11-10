@@ -1,0 +1,46 @@
+<div id="SashimiListsConfigPage" data-role="page" class="page type-interior pluginConfigurationPage">
+  <div data-role="content"><div class="content-primary">
+    <form id="SashimiListsConfigForm">
+      <div class="inputContainer">
+        <label class="inputLabel" for="RequestsUrl">Requests address</label>
+        <input id="RequestsUrl" name="RequestsUrl" type="url" is="emby-input" placeholder="https://requests.example.com" />
+        <div class="fieldDescription">
+          The address of your Seerr / Jellyseerr server. When set, the Sashimi apps use it for
+          Requests and show it as &ldquo;Set by your server&rdquo;, so users only have to sign in.
+          Leave it empty to let each device enter its own address.
+        </div>
+      </div>
+      <button is="emby-button" type="submit" class="raised button-submit block"><span>Save</span></button>
+    </form>
+  </div></div>
+  <script type="text/javascript">
+    var SashimiListsPluginId = "d95b4484-62cb-4873-92c5-66a65b86b420";
+    document.querySelector('#SashimiListsConfigPage').addEventListener('pageshow', function () {
+      Dashboard.showLoadingMsg();
+      ApiClient.getPluginConfiguration(SashimiListsPluginId).then(function (config) {
+        document.querySelector('#RequestsUrl').value = config.RequestsUrl || '';
+        Dashboard.hideLoadingMsg();
+      }).catch(function () {
+        Dashboard.hideLoadingMsg();
+        Dashboard.alert('Failed to load Sashimi Lists configuration.');
+      });
+    });
+    document.querySelector('#SashimiListsConfigForm').addEventListener('submit', function (e) {
+      e.preventDefault();
+      var value = document.querySelector('#RequestsUrl').value.trim();
+      if (value && !/^https?:\/\/[^\s\/]+/i.test(value)) {
+        Dashboard.alert('Enter a full address starting with http:// or https://, or leave it empty.');
+        return false;
+      }
+      Dashboard.showLoadingMsg();
+      ApiClient.getPluginConfiguration(SashimiListsPluginId).then(function (config) {
+        config.RequestsUrl = value;
+        return ApiClient.updatePluginConfiguration(SashimiListsPluginId, config);
+      }).then(Dashboard.processPluginConfigurationUpdateResult).catch(function () {
+        Dashboard.hideLoadingMsg();
+        Dashboard.alert('Failed to save Sashimi Lists configuration.');
+      });
+      return false;
+    });
+  </script>
+</div>

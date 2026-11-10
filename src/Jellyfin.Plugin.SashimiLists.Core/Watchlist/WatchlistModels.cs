@@ -114,6 +114,12 @@ public sealed class UserWatchlist
     /// </summary>
     public bool PlexOptedOut { get; set; }
 
+    /// <summary>
+    /// The one-time merge of the user's old "Watchlist" playlist has run, so it
+    /// never runs again (even if they later make a new playlist with that name).
+    /// </summary>
+    public bool PlaylistMerged { get; set; }
+
     /// <summary>The ratingKeys on the user's Plex watchlist at the end of the last successful sync.</summary>
     public HashSet<string> LastPlexSnapshot { get; set; } = new(StringComparer.Ordinal);
 

@@ -58,6 +58,61 @@ public static class WatchlistContract
     public static AddItemResponseDto ToAddResponse(EntryView entry, bool added) => new(ToDto(entry), added);
 
     /// <summary>
+    /// <c>GET /SashimiLists/Watchlist/Search</c>. A hit carries the same field names
+    /// as a <c>POST Items</c> body, so clients can post it back as it is.
+    /// </summary>
+    public static SearchResponseDto ToSearchDto(string query, SearchResults results)
+    {
+        ArgumentNullException.ThrowIfNull(results);
+        return new SearchResponseDto(query, results.OnServer.Select(ToDto).ToList(), results.NotOnServer.Select(ToDto).ToList());
+    }
+
+    public static SearchHitDto ToDto(SearchHit hit)
+    {
+        ArgumentNullException.ThrowIfNull(hit);
+        return new SearchHitDto(
+            hit.Type.ToString(),
+            hit.Name,
+            hit.Year,
+            hit.Ids.Tmdb,
+            hit.Ids.Tvdb,
+            hit.Ids.Imdb,
+            hit.PosterUrl,
+            hit.Overview,
+            hit.ItemId,
+            hit.EntryId is not null,
+            hit.EntryId?.ToString("N"));
+    }
+
+    /// <summary><c>GET /SashimiLists/Watchlist/Details</c>. Unknown fields are left out, not null.</summary>
+    public static TitleDetailsDto ToDetailsDto(TitleDetails details)
+    {
+        ArgumentNullException.ThrowIfNull(details);
+        return new TitleDetailsDto(
+            details.Type.ToString(),
+            details.Name,
+            details.Year,
+            details.Overview,
+            details.PosterUrl,
+            details.BackdropUrl,
+            details.RuntimeMinutes,
+            details.SeasonCount,
+            details.OfficialRating,
+            details.Genres.Count == 0 ? null : details.Genres,
+            details.CommunityRating,
+            details.Source,
+            details.Ids.Tmdb,
+            details.Ids.Tvdb,
+            details.Ids.Imdb,
+            details.ItemId,
+            details.EntryId is not null,
+            details.EntryId?.ToString("N"));
+    }
+
+    /// <summary><c>GET /SashimiLists/Config</c>: <c>requestsUrl</c> is null when the setting is empty or not a URL.</summary>
+    public static ConfigDto ToConfigDto(string? requestsAddress) => new(RequestsAddress.Normalize(requestsAddress));
+
+    /// <summary>
     /// Status and body for <c>POST /SashimiLists/Watchlist/Plex</c>. A rejected
     /// token is 422, never 401: clients read any 401 as an expired Jellyfin session.
     /// plex.tv unreachable or failing is 503.
@@ -204,3 +259,44 @@ public sealed record AddItemResponseDto(
 public sealed record LinkConflictDto(
     [property: JsonPropertyName("username")] string Username,
     [property: JsonPropertyName("newUsername")] string NewUsername);
+
+public sealed record SearchResponseDto(
+    [property: JsonPropertyName("query")] string Query,
+    [property: JsonPropertyName("onServer")] IReadOnlyList<SearchHitDto> OnServer,
+    [property: JsonPropertyName("notOnServer")] IReadOnlyList<SearchHitDto> NotOnServer);
+
+public sealed record SearchHitDto(
+    [property: JsonPropertyName("type")] string Type,
+    [property: JsonPropertyName("title")] string Title,
+    [property: JsonPropertyName("year")] int? Year,
+    [property: JsonPropertyName("tmdbId")] string? TmdbId,
+    [property: JsonPropertyName("tvdbId")] string? TvdbId,
+    [property: JsonPropertyName("imdbId")] string? ImdbId,
+    [property: JsonPropertyName("posterUrl")] string? PosterUrl,
+    [property: JsonPropertyName("overview")] string? Overview,
+    [property: JsonPropertyName("itemId")] string? ItemId,
+    [property: JsonPropertyName("onWatchlist")] bool OnWatchlist,
+    [property: JsonPropertyName("watchlistEntryId")] string? WatchlistEntryId);
+
+public sealed record TitleDetailsDto(
+    [property: JsonPropertyName("type")] string Type,
+    [property: JsonPropertyName("title")] string Title,
+    [property: JsonPropertyName("year"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? Year,
+    [property: JsonPropertyName("overview"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Overview,
+    [property: JsonPropertyName("posterUrl"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? PosterUrl,
+    [property: JsonPropertyName("backdropUrl"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? BackdropUrl,
+    [property: JsonPropertyName("runtimeMinutes"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? RuntimeMinutes,
+    [property: JsonPropertyName("seasonCount"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? SeasonCount,
+    [property: JsonPropertyName("officialRating"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? OfficialRating,
+    [property: JsonPropertyName("genres"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<string>? Genres,
+    [property: JsonPropertyName("communityRating"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] double? CommunityRating,
+    [property: JsonPropertyName("source"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Source,
+    [property: JsonPropertyName("tmdbId"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? TmdbId,
+    [property: JsonPropertyName("tvdbId"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? TvdbId,
+    [property: JsonPropertyName("imdbId"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ImdbId,
+    [property: JsonPropertyName("itemId"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ItemId,
+    [property: JsonPropertyName("onWatchlist")] bool OnWatchlist,
+    [property: JsonPropertyName("watchlistEntryId"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? WatchlistEntryId);
+
+public sealed record ConfigDto(
+    [property: JsonPropertyName("requestsUrl")] string? RequestsUrl);

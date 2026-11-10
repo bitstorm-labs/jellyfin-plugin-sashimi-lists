@@ -5,13 +5,17 @@ using MediaBrowser.Model.Serialization;
 
 namespace Jellyfin.Plugin.SashimiLists;
 
-/// <summary>Playlist-owner lookups and the per-user Watchlist for Sashimi clients. No settings.</summary>
-public class SashimiListsPlugin : BasePlugin<BasePluginConfiguration>
+/// <summary>Playlist-owner lookups and the per-user Watchlist for Sashimi clients. One setting: the Requests address.</summary>
+public class SashimiListsPlugin : BasePlugin<PluginConfiguration>, IHasWebPages
 {
     public SashimiListsPlugin(IApplicationPaths applicationPaths, IXmlSerializer xmlSerializer)
         : base(applicationPaths, xmlSerializer)
     {
+        Instance = this;
     }
+
+    /// <summary>The loaded plugin, for reading its configuration.</summary>
+    public static SashimiListsPlugin? Instance { get; private set; }
 
     public override string Name => "Sashimi Lists";
 
@@ -22,4 +26,13 @@ public class SashimiListsPlugin : BasePlugin<BasePluginConfiguration>
         + "keep their creator even after Jellyfin drops a playlist's shares, and keeps "
         + "each user's Watchlist, which can hold titles not on the server and can sync "
         + "with their own Plex watchlist.";
+
+    public IEnumerable<PluginPageInfo> GetPages() =>
+    [
+        new PluginPageInfo
+        {
+            Name = Name,
+            EmbeddedResourcePath = $"{GetType().Namespace}.configPage.html",
+        },
+    ];
 }
