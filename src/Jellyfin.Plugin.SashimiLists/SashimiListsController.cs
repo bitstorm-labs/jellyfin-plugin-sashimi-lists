@@ -81,7 +81,7 @@ public class SashimiListsController : ControllerBase
         caller = new Caller(Guid.Empty, false);
         service = null!;
         var claim = User.FindFirstValue(UserIdClaim);
-        if (!Guid.TryParse(claim, out var userId))
+        if (!CallerClaim.TryParse(claim, out var userId))
         {
             return false;
         }

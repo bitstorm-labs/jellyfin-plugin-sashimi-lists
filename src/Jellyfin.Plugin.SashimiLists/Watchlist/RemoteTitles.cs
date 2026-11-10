@@ -65,7 +65,7 @@ public sealed class RemoteTitles
             : await Metadata<Series, SeriesInfo>(new SeriesInfo(), ids, token).ConfigureAwait(false);
 
         var known = item is null ? ids : WatchlistSearch.Union(IdsOf(item), ids);
-        var images = Images(type, known, token);
+        var images = Images(type, known, provider, token);
         var extras = TmdbExtras(type, known.Tmdb, token);
         var searchHit = item is null ? FindById(type, ids, token) : Task.FromResult<RemoteTitle?>(null);
         await Task.WhenAll(images, extras, searchHit).ConfigureAwait(false);
@@ -149,12 +149,25 @@ public sealed class RemoteTitles
         return (null, null);
     }
 
-    private async Task<(string? Poster, string? Backdrop)> Images(WatchlistType type, ExternalIds ids, CancellationToken ct)
+    /// <summary>
+    /// Poster and backdrop, from the provider that gave the metadata when it has
+    /// images (so "Details from TMDB" is true of the artwork too, and providers that
+    /// can't handle a stand-in item, such as TheTVDB's, aren't asked and don't log
+    /// errors); otherwise from any image provider.
+    /// </summary>
+    private async Task<(string? Poster, string? Backdrop)> Images(WatchlistType type, ExternalIds ids, string? provider, CancellationToken ct)
     {
         try
         {
             BaseItem item = type == WatchlistType.Movie ? Dummy<Movie>(ids) : Dummy<Series>(ids);
-            var images = (await _providerManager.GetAvailableRemoteImages(item, new RemoteImageQuery(string.Empty), ct).ConfigureAwait(false)).ToList();
+            var images = provider is null
+                ? []
+                : (await _providerManager.GetAvailableRemoteImages(item, new RemoteImageQuery(provider), ct).ConfigureAwait(false)).ToList();
+            if (images.Count == 0)
+            {
+                images = (await _providerManager.GetAvailableRemoteImages(item, new RemoteImageQuery(string.Empty), ct).ConfigureAwait(false)).ToList();
+            }
+
             string? First(ImageType kind) => images.Where(i => i.Type == kind).Select(i => PosterUrls.Clean(i.Url)).FirstOrDefault(u => u is not null);
             return (First(ImageType.Primary), First(ImageType.Backdrop));
         }
@@ -236,6 +249,8 @@ public sealed class RemoteTitles
     private TLookup WithIds<TLookup>(TLookup info, ExternalIds ids)
         where TLookup : ItemLookupInfo
     {
+        // Some providers (TheTVDB's) dereference Name even when an id is given.
+        info.Name ??= string.Empty;
         info.MetadataLanguage = _config.Configuration.PreferredMetadataLanguage;
         info.MetadataCountryCode = _config.Configuration.MetadataCountryCode;
         SetIds(info, ids);
