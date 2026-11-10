@@ -42,6 +42,9 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
                     count));
         });
         serviceCollection.AddSingleton<PosterFinder>();
+        serviceCollection.AddSingleton<IOldWatchlistPlaylists, JellyfinOldPlaylists>();
+        serviceCollection.AddSingleton<PlaylistMerger>();
+        serviceCollection.AddSingleton<RemoteTitles>();
         serviceCollection.AddHostedService<WatchlistPlayedListener>();
     }
 }

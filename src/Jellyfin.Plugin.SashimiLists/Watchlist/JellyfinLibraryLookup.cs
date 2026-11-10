@@ -1,6 +1,7 @@
 using Jellyfin.Data.Enums;
 using Jellyfin.Plugin.SashimiLists.Core.Watchlist;
 using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Model.Entities;
 
@@ -74,6 +75,36 @@ public sealed class JellyfinLibraryLookup : ILibraryLookup
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// Movies and series whose name matches <paramref name="query"/>, as the user
+    /// sees the library (access and parental limits apply), best match first.
+    /// </summary>
+    public IReadOnlyList<LibraryTitle> Search(Guid userId, string query, int limit)
+    {
+        var user = _userManager.GetUserById(userId);
+        if (user is null)
+        {
+            return [];
+        }
+
+        return _libraryManager.GetItemList(new InternalItemsQuery(user)
+            {
+                SearchTerm = query,
+                IncludeItemTypes = [BaseItemKind.Movie, BaseItemKind.Series],
+                IsVirtualItem = false,
+                Recursive = true,
+                Limit = limit,
+            })
+            .Select(item => new LibraryTitle(
+                item.Id.ToString("N"),
+                item is Series ? WatchlistType.Series : WatchlistType.Movie,
+                item.Name ?? string.Empty,
+                item.ProductionYear,
+                IdsOf(item),
+                item.Overview))
+            .ToList();
     }
 
     /// <summary>The library item itself, for callers in the plugin shell.</summary>

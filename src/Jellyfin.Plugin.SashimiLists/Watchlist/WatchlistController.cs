@@ -27,14 +27,31 @@ public class WatchlistController : ControllerBase
     private readonly WatchlistService _service;
     private readonly PosterFinder _posters;
     private readonly PlexSync _sync;
+    private readonly PlaylistMerger _merger;
+    private readonly IWatchlistStore _store;
+    private readonly JellyfinLibraryLookup _library;
+    private readonly RemoteTitles _remote;
     private readonly IUserManager _userManager;
     private readonly ILogger<WatchlistController> _logger;
 
-    public WatchlistController(WatchlistService service, PosterFinder posters, PlexSync sync, IUserManager userManager, ILogger<WatchlistController> logger)
+    public WatchlistController(
+        WatchlistService service,
+        PosterFinder posters,
+        PlexSync sync,
+        PlaylistMerger merger,
+        IWatchlistStore store,
+        JellyfinLibraryLookup library,
+        RemoteTitles remote,
+        IUserManager userManager,
+        ILogger<WatchlistController> logger)
     {
         _service = service;
         _posters = posters;
         _sync = sync;
+        _merger = merger;
+        _store = store;
+        _library = library;
+        _remote = remote;
         _userManager = userManager;
         _logger = logger;
     }
@@ -48,7 +65,62 @@ public class WatchlistController : ControllerBase
             return Unauthorized();
         }
 
+        MergeOldPlaylist(user);
         return Json(WatchlistContract.ToDto(_service.View(user)));
+    }
+
+    /// <summary>
+    /// Movies and series matching <c>q</c>, in two groups: on the server (visible to
+    /// the caller) and not on the server (from the server's metadata providers).
+    /// </summary>
+    [HttpGet("Search")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> Search([FromQuery] string? q, CancellationToken ct)
+    {
+        if (!TryGetCaller(out var user))
+        {
+            return Unauthorized();
+        }
+
+        if (!WatchlistSearch.TryReadQuery(q, out var query))
+        {
+            return BadRequest($"q is required (1-{WatchlistSearch.MaxQueryLength} characters).");
+        }
+
+        var library = _library.Search(user, query, WatchlistSearch.GroupLimit);
+        var remote = await _remote.Search(query, ct).ConfigureAwait(false);
+        var matches = remote.Count == 0 ? [] : _library.FindVisibleItemIds(user, remote.Select(r => (r.Type, r.Ids)).ToList());
+        var results = WatchlistSearch.Combine(library, remote, matches, _store.Read(user).Entries);
+        return Json(WatchlistContract.ToSearchDto(query, results));
+    }
+
+    /// <summary>What the server's metadata providers know about one movie or series, for its details page.</summary>
+    [HttpGet("Details")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Details(
+        [FromQuery] string? type,
+        [FromQuery] string? tmdbId,
+        [FromQuery] string? tvdbId,
+        [FromQuery] string? imdbId,
+        CancellationToken ct)
+    {
+        if (!TryGetCaller(out var user))
+        {
+            return Unauthorized();
+        }
+
+        if (!TitleDetailsRules.TryReadQuery(type, tmdbId, tvdbId, imdbId, out var titleType, out var ids))
+        {
+            return BadRequest("type must be movie or series, with a numeric tmdbId or tvdbId, or an imdbId like tt123.");
+        }
+
+        var source = await _remote.Describe(titleType, ids, ct).ConfigureAwait(false);
+        var itemId = _library.FindVisibleItemId(user, titleType, WatchlistSearch.Union(source.Ids, ids));
+        var details = TitleDetailsRules.Build(titleType, source, itemId, _store.Read(user).Entries, ids);
+        return details is null ? NotFound() : Json(WatchlistContract.ToDetailsDto(details));
     }
 
     [HttpPost("Items")]
@@ -150,6 +222,51 @@ public class WatchlistController : ControllerBase
 
         _service.DismissCard(user);
         return NoContent();
+    }
+
+    /// <summary>
+    /// The one-time merge of the caller's old "Watchlist" playlist. A failure is
+    /// logged and the GET still answers; the merge retries on the next GET.
+    /// </summary>
+    private void MergeOldPlaylist(Guid user)
+    {
+        try
+        {
+            var result = _merger.MergeOnce(user);
+            if (!result.Ran)
+            {
+                return;
+            }
+
+            _logger.LogInformation(
+                "Merged the old Watchlist playlist for user {UserId}: {Added} title(s) added, {Skipped} item(s) skipped",
+                user.ToString("N"),
+                result.Added,
+                result.SkippedItemIds.Count);
+            if (result.SkippedItemIds.Count > 0)
+            {
+                _logger.LogInformation(
+                    "Watchlist merge for user {UserId} skipped items that aren't movies or shows with a TMDB/TVDB/IMDb id: {ItemIds}",
+                    user.ToString("N"),
+                    string.Join(',', result.SkippedItemIds));
+            }
+
+            foreach (var (playlistId, error) in result.DeleteFailures)
+            {
+                _logger.LogError(
+                    "Watchlist merge for user {UserId} couldn't delete playlist {PlaylistId} ({Error}); the merge still counts as done",
+                    user.ToString("N"),
+                    playlistId.ToString("N"),
+                    error.GetType().Name);
+            }
+        }
+        catch (Exception e)
+        {
+            _logger.LogError(
+                "Watchlist merge of the old playlist failed for user {UserId} ({Error}); it will retry on the next request",
+                user.ToString("N"),
+                e.GetType().Name);
+        }
     }
 
     private static JsonResult Json(object value, int status = StatusCodes.Status200OK)

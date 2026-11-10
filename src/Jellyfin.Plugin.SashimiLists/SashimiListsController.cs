@@ -3,6 +3,7 @@ using System.Security.Claims;
 using Jellyfin.Data;
 using Jellyfin.Database.Implementations.Enums;
 using Jellyfin.Plugin.SashimiLists.Core;
+using Jellyfin.Plugin.SashimiLists.Core.Watchlist;
 using MediaBrowser.Controller.Library;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -31,6 +32,15 @@ public class SashimiListsController : ControllerBase
         _libraryManager = libraryManager;
         _userManager = userManager;
     }
+
+    /// <summary>
+    /// Server-wide settings the Sashimi apps follow. Any signed-in user may read
+    /// them. <c>requestsUrl</c> is null when the admin hasn't set a Requests address.
+    /// </summary>
+    [HttpGet("Config")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public IActionResult GetConfig()
+        => new JsonResult(WatchlistContract.ToConfigDto(SashimiListsPlugin.Instance?.Configuration.RequestsUrl), WatchlistContract.JsonOptions);
 
     /// <summary>The owner of one playlist the caller can see; 404 otherwise.</summary>
     [HttpGet("Playlists/{playlistId}/Owner")]
